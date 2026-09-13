@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Output artifacts
+outputs/audio/*.wav
+
+# IDE / System
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & Secrets
+.env
+.env.local
+*.pem
+*.key

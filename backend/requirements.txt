@@ -1,0 +1,15 @@
+# JARVIX Backend Core Dependencies
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+psutil
+soundfile
+
+# PostgreSQL & Vector Database Drivers (Installed per deployment environment)
+# psycopg2-binary
+# pgvector
+
+# Voice Services (Installed separately per hardware capability)
+# torch
+# omnivoice
