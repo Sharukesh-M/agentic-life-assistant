@@ -3,7 +3,10 @@
 # none of it present boots straight to the setup screen, which is the intended
 # first experience — so nothing here needs to be committed, and some of it must
 # never be.
-
+.env
+config/api_keys.json
+readme.md
+mark53
 # ── Secrets. Committing any of these publishes them. ──────────────────────────
 config/api_keys.json          # your Gemini API key, plus per-plugin credentials
 config/certs/                 # the dashboard's TLS private key and certificate
