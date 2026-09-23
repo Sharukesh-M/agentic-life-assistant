@@ -32,14 +32,17 @@ PLUGIN = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "enum": ["create", "list", "checkin", "status"],
-                "description": "create a new goal, list all active goals, log a progress note, or get a status summary.",
+                "enum": ["create", "list", "checkin", "status", "update_context", "set_plan"],
+                "description": "create/list/check in/status, update structured goal context, or save a generated plan.",
             },
             "subject": {
                 "type": "STRING",
                 "description": "The goal's subject, e.g. 'GATE exam' or 'learning Spanish' (required for 'create', 'checkin', 'status').",
             },
             "note": {"type": "STRING", "description": "Progress note text (required for 'checkin')."},
+            "goal_type": {"type": "STRING", "description": "Goal category such as exam_preparation, learning, fitness, or project."},
+            "metadata": {"type": "OBJECT", "description": "Known structured context for the goal; only include details the user provided."},
+            "plan": {"type": "OBJECT", "description": "Generated milestones/tasks plan to save for this goal."},
         },
         "required": ["action"],
     },
@@ -62,7 +65,7 @@ def _find(goals, subject):
     return next((g for g in goals if g["subject"].lower() == subject_lower), None)
 
 
-def _create(subject):
+def _create(subject, goal_type=None):
     goals = _load()
     if _find(goals, subject):
         return f"You already have an active goal for '{subject}'."
@@ -72,6 +75,9 @@ def _create(subject):
         "created": datetime.now().isoformat(),
         "status": "active",
         "checkins": [],
+        "goal_type": goal_type or "project",
+        "metadata": {},
+        "plan": None,
     }
     goals.append(goal)
     _save(goals)
@@ -110,14 +116,40 @@ def _status(subject):
     return f"'{goal['subject']}' — {days_active} day(s) active, {n} check-in(s). Latest: {latest}"
 
 
+def _update_context(subject, metadata):
+    goals = _load()
+    goal = _find(goals, subject)
+    if not goal:
+        return f"I don't have a goal called '{subject}'."
+    if isinstance(metadata, dict):
+        goal.setdefault("metadata", {}).update({k: v for k, v in metadata.items() if v not in (None, "", [], {})})
+    _save(goals)
+    return f"Updated the context for '{goal['subject']}'."
+
+
+def _set_plan(subject, plan):
+    goals = _load()
+    goal = _find(goals, subject)
+    if not goal:
+        return f"I don't have a goal called '{subject}'."
+    if not isinstance(plan, dict):
+        return "The plan must contain structured milestones or tasks."
+    goal["plan"] = plan
+    _save(goals)
+    return f"Created an initial plan for '{goal['subject']}'."
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     action = parameters.get("action", "")
     subject = parameters.get("subject")
     note = parameters.get("note")
+    goal_type = parameters.get("goal_type")
+    metadata = parameters.get("metadata")
+    plan = parameters.get("plan")
 
     try:
         if action == "create":
-            result_text = "What's the goal about?" if not subject else _create(subject)
+            result_text = "What's the goal about?" if not subject else _create(subject, goal_type)
         elif action == "list":
             result_text = _list()
         elif action == "checkin":
@@ -126,6 +158,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             )
         elif action == "status":
             result_text = "Which goal do you want a status on?" if not subject else _status(subject)
+        elif action == "update_context":
+            result_text = "Which goal should I update?" if not subject else _update_context(subject, metadata)
+        elif action == "set_plan":
+            result_text = "Which goal should receive the plan?" if not subject else _set_plan(subject, plan)
         else:
             result_text = f"Sir, I don't recognize the goal action '{action}'."
     except Exception as e:

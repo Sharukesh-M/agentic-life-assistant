@@ -1,0 +1,109 @@
+[
+  {
+    "id": "cc757b",
+    "subject": "GATE exam",
+    "created": "2026-09-22T18:32:51.804987",
+    "status": "active",
+    "checkins": [
+      {
+        "date": "2026-09-22T20:02:11.175240",
+        "note": "User reports deadline is tomorrow. This contradicts the previously provided long-term study context. Pausing personalization flow to address this contradiction."
+      }
+    ],
+    "goal_type": "exam_preparation",
+    "metadata": {
+      "target_subject": "DA",
+      "target_date": "2027",
+      "subject": "GATE exam"
+    },
+    "plan": {
+      "subject": "One-day intensive Operating Systems review and practice for GATE.",
+      "milestones": [
+        {
+          "tasks": [
+            "Master Process Management & CPU Scheduling",
+            "Understand Memory Management & Virtual Memory",
+            "Learn File Systems & Disk Management",
+            "Review Concurrency & Deadlocks"
+          ],
+          "description": "Focus on high-weightage topics using Physics Wallah notes"
+        },
+        {
+          "description": "Practice with Questions",
+          "tasks": [
+            "Take Operating Systems practice quizzes",
+            "Solve previous year GATE OS questions"
+          ]
+        }
+      ]
+    },
+    "workflow": {
+      "research_started": "2026-09-22T19:56:10.019064",
+      "queries": [
+        "GATE exam official syllabus",
+        "GATE exam important topics and subject weightage",
+        "GATE exam previous year question papers",
+        "GATE exam preparation strategy for beginners"
+      ],
+      "browser_opened": true
+    }
+  },
+  {
+    "id": "92f344",
+    "subject": "GATE Operating Systems",
+    "created": "2026-09-22T19:10:16.696262",
+    "status": "active",
+    "checkins": [],
+    "goal_type": "exam_preparation",
+    "metadata": {},
+    "plan": {
+      "milestones": [
+        {
+          "tasks": [
+            {
+              "description": "Basic concepts, OS structures",
+              "id": "os_intro"
+            }
+          ],
+          "title": "Introduction to OS"
+        },
+        {
+          "tasks": [
+            {
+              "id": "proc_mgmt_topics",
+              "description": "Processes, threads, CPU scheduling, synchronization, deadlocks"
+            }
+          ],
+          "title": "Process Management"
+        },
+        {
+          "tasks": [
+            {
+              "description": "Paging, segmentation, virtual memory, page replacement algorithms",
+              "id": "mem_mgmt_topics"
+            }
+          ],
+          "title": "Memory Management"
+        },
+        {
+          "tasks": [
+            {
+              "description": "File interface, storage management, disk scheduling",
+              "id": "file_storage_topics"
+            }
+          ],
+          "title": "File & Storage Systems"
+        },
+        {
+          "tasks": [
+            {
+              "id": "misc_topics",
+              "description": "System calls, protection, security principles"
+            }
+          ],
+          "title": "Protection & Security"
+        }
+      ]
+    }
+  }
+]

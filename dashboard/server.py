@@ -11,12 +11,15 @@ Install deps:  pip install fastapi "uvicorn[standard]" cryptography
 import asyncio
 import base64
 import hashlib
+import json
 import re
 import secrets
 import socket
 import string
 import time
 from pathlib import Path
+
+from memory.profile_manager import profile_for_ui
 
 _DEPS_OK = False
 try:
@@ -454,6 +457,27 @@ class DashboardServer:
         def _auth(req: Request) -> bool:
             tok = req.headers.get("authorization", "").removeprefix("Bearer ").strip()
             return bool(tok) and tok in self._tokens
+
+        @app.get("/api/profile")
+        async def profile_ep(req: Request):
+            """Return the local structured profile for the authenticated dashboard."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return JSONResponse(profile_for_ui())
+
+        @app.get("/api/goals")
+        async def goals_ep(req: Request):
+            """Return active goal data for a future dashboard goals panel."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            path = BASE_DIR / "memory" / "goals.json"
+            try:
+                goals = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+                if not isinstance(goals, list):
+                    goals = []
+            except (OSError, ValueError):
+                goals = []
+            return JSONResponse({"goals": [g for g in goals if g.get("status") == "active"]})
 
         # serve CryptoJS from local cache, fallback to CDN redirect
         @app.get("/static/crypto.js")

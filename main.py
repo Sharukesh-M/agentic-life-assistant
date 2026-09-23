@@ -54,6 +54,9 @@ from memory.memory_manager import (
     save_session_summary, pop_last_session,
     search_memory, set_trim_notifier,
 )
+from memory.profile_manager import profile_for_prompt, onboarding_status
+from memory.mysql_store import MySQLConversationStore
+from core.goal_workflow import start_goal_workflow
 
 # The file-backed tools (open_app, web_search, browser_control, …) are no longer
 # imported or declared here — they self-describe via a TOOL dict in their own
@@ -121,6 +124,12 @@ def _pcm_level(samples) -> float:
 
 
 def _get_api_key() -> str:
+    # Environment first keeps secrets out of the working tree while retaining
+    # backwards compatibility with existing api_keys.json installations.
+    import os
+    env_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if env_key:
+        return env_key
     with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)["gemini_api_key"]
 
@@ -396,6 +405,7 @@ class JarvisLive:
         self._proactive        = ProactiveEngine()
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._session_log: list[str] = []          # conversation turns for end-of-session summary
+        self._conversation_store = MySQLConversationStore()
 
         self._enhanced_live = True  # proactive audio; auto-disabled if the server rejects it
 
@@ -682,6 +692,8 @@ class JarvisLive:
 
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
+        profile_str = profile_for_prompt()
+        mysql_context = self._conversation_store.prompt_context()
         sys_prompt = _load_system_prompt()
 
         now      = datetime.now()
@@ -709,8 +721,17 @@ class JarvisLive:
         )
 
         parts = [time_ctx, identity_ctx]
+        parts.append(profile_str)
         if mem_str:
             parts.append(mem_str)
+        if mysql_context:
+            parts.append(mysql_context)
+        if onboarding_status().get("status") != "completed":
+            parts.append(
+                "[ONBOARDING]\nThis user has not completed personalization. "
+                "Introduce yourself naturally, ask one relevant question at a time, "
+                "and use profile_onboarding to save answers. Never present a rigid form."
+            )
         parts.append(sys_prompt)
 
         cfg = dict(
@@ -849,6 +870,7 @@ class JarvisLive:
                 self.ui.write_log("SYS: Shutdown requested.")
                 async def _do_shutdown():
                     await self._save_session_summary()
+                    await asyncio.to_thread(self._conversation_store.close)
                     if self.session:
                         try:
                             await self.session.send_client_content(
@@ -886,6 +908,16 @@ class JarvisLive:
                         lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None)
                     )
                     result = r or "Done."
+                    # A newly created goal is an explicit request for ongoing
+                    # assistance, not just a memory write. Research it and
+                    # seed an editable plan automatically.
+                    if name == "goal_tracker" and args.get("action") == "create" and args.get("subject"):
+                        workflow = await asyncio.to_thread(
+                            start_goal_workflow,
+                            args.get("subject"),
+                            args.get("goal_type"),
+                        )
+                        result += "\n[AUTO_GOAL_WORKFLOW] " + json.dumps(workflow, ensure_ascii=False)
                 else:
                     result = f"Unknown tool: {name}"
 
@@ -1057,6 +1089,9 @@ class JarvisLive:
                             if full_in:
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
+                                asyncio.create_task(asyncio.to_thread(
+                                    self._conversation_store.save_message, "user", full_in
+                                ))
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "user",
@@ -1069,6 +1104,9 @@ class JarvisLive:
                             if full_out:
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
+                                asyncio.create_task(asyncio.to_thread(
+                                    self._conversation_store.save_message, "assistant", full_out
+                                ))
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "jarvis",
