@@ -105,5 +105,68 @@
         }
       ]
     }
+  },
+  {
+    "id": "65c342",
+    "subject": "Java exam",
+    "created": "2026-09-29T16:20:46.109068",
+    "status": "active",
+    "checkins": [],
+    "goal_type": "exam_preparation",
+    "metadata": {},
+    "plan": {
+      "milestones": [
+        {
+          "title": "Understand the syllabus",
+          "tasks": [
+            {
+              "title": "Collect the official syllabus",
+              "status": "pending"
+            },
+            {
+              "title": "List subjects and their weightage",
+              "status": "pending"
+            }
+          ]
+        },
+        {
+          "title": "Measure the starting level",
+          "tasks": [
+            {
+              "title": "Take a diagnostic or previous-year paper",
+              "status": "pending"
+            },
+            {
+              "title": "Record weak and strong topics",
+              "status": "pending"
+            }
+          ]
+        },
+        {
+          "title": "Build a weekly study routine",
+          "tasks": [
+            {
+              "title": "Choose realistic study hours",
+              "status": "pending"
+            },
+            {
+              "title": "Start the first topic focus session",
+              "status": "pending"
+            }
+          ]
+        }
+      ],
+      "next_task": "Collect the official syllabus"
+    },
+    "workflow": {
+      "research_started": "2026-09-29T16:20:46.134345",
+      "queries": [
+        "Java exam official syllabus",
+        "Java exam important topics and subject weightage",
+        "Java exam previous year question papers",
+        "Java exam preparation strategy for beginners"
+      ],
+      "browser_opened": true
+    }
   }
 ]

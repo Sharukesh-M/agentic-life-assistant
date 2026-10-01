@@ -82,10 +82,22 @@ from core.action_loader        import discover_actions
 from core.wake_word            import (
     WakeWordDetector, is_ready as wake_is_ready, install_and_download as wake_install,
 )
+# Phase 3 — Agent orchestration layer (additive; never breaks existing flow)
+from core.orchestrator         import get_orchestrator, OrchestratorRequest
+from core                      import agent_bootstrap
+# Phase 5 — Voice state machine and real barge-in detection
+from core.voice_controller     import VoiceController
+from core.state_manager        import get_app_state, VoiceStateEnum
 
 # How long the assistant stays awake with no user speech before it auto-sleeps
 # again (wake-word mode only).
 WAKE_SLEEP_TIMEOUT = 120.0   # seconds (2 minutes)
+
+
+class _OrchestratorHandled(Exception):
+    """Sentinel: Orchestrator routed to an agent — skip the tool if/elif chain."""
+    def __init__(self, result: str) -> None:
+        self.result = result
 
 def get_base_dir():
     if getattr(sys, "frozen", False):
@@ -432,6 +444,20 @@ class JarvisLive:
         self.ui.get_plugin_settings = self._plugin_registry.settings_schemas  # ⚙ settings tab
         self.ui.request_say = self.plugin_say   # plugins: mid-task speech channel
 
+        # ── Phase 3: Agent Orchestrator ──────────────────────────────────────
+        # Bootstrap all agents (goal, planning, progress, learning, memory,
+        # proactive) into the process-level AgentRegistry, then get the
+        # singleton Orchestrator that routes tool calls to agents.
+        # Falls through transparently when no agent claims the tool.
+        _orch_log = lambda m: (print(m), self.ui.write_log(f"SYS: {m}"))
+        agent_bootstrap.bootstrap(logger_fn=_orch_log)
+        self._orchestrator = get_orchestrator()
+
+        # ── Phase 5: Voice Controller & State Machine ────────────────────────
+        self.voice_controller = VoiceController(session=get_app_state().session)
+        self.voice_controller.on_state_change = self._on_voice_state_changed
+        self.voice_controller.on_barge_in = self._on_barge_in_triggered
+
         # ── Wake word ────────────────────────────────────────────────────────
         # _awake gates the mic (see _listen_audio) and the background speakers.
         # It is True whenever wake word is OFF, so default behaviour is unchanged.
@@ -474,8 +500,7 @@ class JarvisLive:
             return
         self._awake = True
         self._last_user_speech = time.monotonic()   # start the auto-sleep clock now
-        if not self.ui.muted:
-            self.ui.set_state("LISTENING")
+        self.voice_controller.wake()
         self.ui.write_log(f"SYS: Awake — {reason}.")
 
     def sleep(self, reason: str = "timeout") -> None:
@@ -483,7 +508,7 @@ class JarvisLive:
             return
         self._awake = False
         self.set_speaking(False)
-        self.ui.set_state("SLEEPING")
+        self.voice_controller.sleep()
         self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey Jarvis' to wake me.")
 
     async def _run_sleep_watch(self) -> None:
@@ -635,13 +660,23 @@ class JarvisLive:
             self._loop
         )
 
+    def _on_voice_state_changed(self, new_state: VoiceStateEnum) -> None:
+        try:
+            if hasattr(self, "ui") and self.ui and not self.ui.muted:
+                self.ui.set_state(new_state.value.upper())
+        except Exception:
+            pass
+
+    def _on_barge_in_triggered(self) -> None:
+        self.interrupt()
+
     def set_speaking(self, value: bool):
         with self._speaking_lock:
             self._is_speaking = value
         if value:
-            self.ui.set_state("SPEAKING")
-        elif not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            self.voice_controller.start_speaking()
+        else:
+            self.voice_controller.stop_speaking()
 
     def interrupt(self) -> None:
         """Stop JARVIS mid-speech: drain queued audio and open mic immediately."""
@@ -657,7 +692,7 @@ class JarvisLive:
                     break
             if drained:
                 print(f"[JARVIS] ✋ Interrupted — {drained} audio chunks discarded")
-        self.set_speaking(False)
+        self.voice_controller.interrupt()
         if self._turn_done_event:
             self._turn_done_event.clear()
         self.ui.write_log("SYS: Interrupted — listening...")
@@ -798,6 +833,39 @@ class JarvisLive:
         result = "Done."
 
         try:
+            # ── Phase 3: Orchestrator pre-step ───────────────────────────────
+            # Ask the Orchestrator if a registered agent wants to handle this
+            # tool call. If handled=True the agent result is used directly and
+            # the rest of _execute_tool is skipped. If handled=False (the
+            # default in Phase 2 and for any unregistered tool), execution
+            # falls through to the existing if/elif chain unchanged.
+            _orch_req = OrchestratorRequest(
+                tool_name=name,
+                tool_args=args,
+                session_log=self._session_log[-8:],
+                memory_snapshot={},   # kept lightweight; agents load their own
+            )
+            _orch_decision = await asyncio.to_thread(
+                self._orchestrator.route, _orch_req
+            )
+            if _orch_decision.handled:
+                result = _orch_decision.result or "Done."
+                if _orch_decision.skill_name:
+                    try:
+                        from core.skill_loader import get_skill_registry
+                        skill = get_skill_registry().get(_orch_decision.skill_name)
+                        if skill:
+                            result = f"{result}\n\n{skill.as_context_block()}"
+                    except Exception:
+                        pass
+                self.ui.write_log(
+                    f"[Orch] {name} -> {_orch_decision.agent_name}"
+                    + (f" (skill={_orch_decision.skill_name})" if _orch_decision.skill_name else "")
+                )
+                # Skip the existing if/elif tool dispatch entirely
+                raise _OrchestratorHandled(result)
+            # ─────────────────────────────────────────────────────────────────
+
             if name == "recall_memory":
                 # Local file search: no network, no second model. Kept out of
                 # the executor deliberately — it is a dictionary scan over a few
@@ -921,6 +989,9 @@ class JarvisLive:
                 else:
                     result = f"Unknown tool: {name}"
 
+        except _OrchestratorHandled as _oh:
+            # Agent handled the tool — result is already set, skip error path
+            result = _oh.result
         except Exception as e:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
@@ -955,18 +1026,22 @@ class JarvisLive:
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
-            # ── Wake-word gate ───────────────────────────────────────────────
-            # While asleep, the mic audio NEVER goes to Gemini (nothing is
-            # streamed, so JARVIS can't respond to speech not addressed to it and
-            # nothing leaves the machine). Frames are instead handed to the local
-            # detector, which runs its model in ITS OWN thread — the cost here is
-            # only a queue push, so the audio path is never slowed. When wake word
-            # is off (default) or we're awake, this is a single boolean check.
             if self._wake_enabled and not self._awake:
                 det = self._wake_detector
                 if det is not None:
                     det.feed(indata)
                 return
+
+            try:
+                x = np.asarray(indata, dtype=np.float32)
+                raw_rms = float(np.sqrt(np.mean(x * x))) if x.size > 0 else 0.0
+            except Exception:
+                raw_rms = 0.0
+
+            # Phase 5: Real-time barge-in detection when JARVIS is speaking
+            if self.voice_controller.is_speaking():
+                self.voice_controller.feed_mic_level(raw_rms)
+
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
             if not jarvis_speaking and not self.ui.muted and not self._phone_active:
@@ -975,9 +1050,6 @@ class JarvisLive:
                     self.out_queue.put_nowait,
                     {"data": data, "mime_type": "audio/pcm"}
                 )
-                # Feed the live mic level to the HUD so the waveform reacts to
-                # the user's actual voice while listening. Purely cosmetic — any
-                # failure here must never disturb the mic.
                 try:
                     self.ui.set_audio_level(_pcm_level(indata))
                 except Exception:
@@ -1243,12 +1315,9 @@ class JarvisLive:
 
     async def _send_startup_briefing(self) -> None:
         """
-        Two-phase briefing optimized for speed:
-          Phase 1 — instant greeting (no tools) → speech starts in <1s
-          Phase 2 — news pre-fetched in a background thread while Phase 1 plays,
-                    delivered as ready text (no Gemini tool-call round-trip) and
-                    shown on the UI content panel. Waits for turn_complete event
-                    instead of a fixed sleep so there is no unnecessary gap.
+        Goal-aware startup briefing:
+          Instant, personalized greeting that checks the user's active goals
+          and daily schedule rather than reading general news headlines.
         """
         memory   = load_memory()
         identity = memory.get("identity", {})
@@ -1259,26 +1328,26 @@ class JarvisLive:
 
         lang = _val("language")
         name = _val("name")
-        time_str = datetime.now().strftime("%H:%M")
+        time_str = datetime.now().strftime("%I:%M %p")
 
-        # Start fetching news immediately — runs in parallel while phase 1 plays
-        loop = asyncio.get_event_loop()
-        news_future = loop.run_in_executor(None, _fetch_news_sync, "top world news today")
+        # Load active goals for context
+        active_goals = []
+        try:
+            from plugins.goal_tracker import _load as _load_gt_goals
+            active_goals = [g.get("subject") for g in _load_gt_goals() if g.get("status") == "active" and g.get("subject")]
+        except Exception:
+            pass
 
         await asyncio.sleep(0.3)
         if not self.session:
             return
 
-        # ── Phase 1: instant greeting ─────────────────────────────────────────
-        # The briefing fires before the user has said anything, so the
-        # remembered language is the only signal there is. It is a starting
-        # point, not a setting: the moment they reply, their language wins.
         lang_clause = (f" Speak this greeting in {lang}, then follow the "
                        f"user's own language from their first reply onward."
                        if lang else "")
         name_clause = f" Address the user as {name}." if name else ""
 
-        # Inject last session context if available — pop removes it so it's never repeated
+        # Inject last session context if available
         last = await asyncio.to_thread(pop_last_session)
         session_clause = ""
         if last:
@@ -1287,85 +1356,35 @@ class JarvisLive:
                 _when  = "earlier today" if _delta == 0 else ("yesterday" if _delta == 1 else f"{_delta} days ago")
             except Exception:
                 _when = "last time"
-            session_clause = (
-                f" Also briefly and naturally mention that {_when}: {last['summary']}"
+            session_clause = f" Mention briefly that {_when}: {last['summary']}"
+
+        if active_goals:
+            goals_str = ", ".join(active_goals[:3])
+            prompt_text = (
+                f"Greet the user warmly, mention it is {time_str}.{session_clause} "
+                f"Acknowledge their active goal(s): {goals_str}. Ask how they'd like to proceed today. "
+                f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}{name_clause}"
+            )
+        elif name:
+            prompt_text = (
+                f"Greet {name} warmly, mention it is {time_str}.{session_clause} "
+                "Ask naturally what they are working toward or focusing on today. "
+                f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}"
+            )
+        else:
+            prompt_text = (
+                f"Greet the user warmly, introduce yourself as JARVIS-X (their proactive goal and life assistant), "
+                f"and ask naturally what you should call them. Keep it to 2 short sentences max. Do not call any tools.{lang_clause}"
             )
 
-        p1 = (
-            f"Greet the user warmly, mention it is {time_str}, and say you are fetching today's news now.{session_clause} "
-            f"Keep it to 2 short sentences max. Do not call any tools.{lang_clause}{name_clause}"
-        )
-
-        # Clear the turn-done event so we can wait for Phase 1 to finish
         if self._turn_done_event:
             self._turn_done_event.clear()
 
         await self.session.send_client_content(
-            turns={"role": "user", "parts": [{"text": p1}]},
+            turns={"role": "user", "parts": [{"text": prompt_text}]},
             turn_complete=True,
         )
-        self.ui.write_log("SYS: Briefing phase 1 (greeting) sent.")
-
-        # ── Phase 2: fire as soon as Phase 1 audio is done ───────────────────
-        async def _deliver_news():
-            try:
-                lang_str = (f" Speak in {lang} unless the user has since "
-                            f"spoken another language, in which case use theirs."
-                            if lang else "")
-
-                # Wait for news fetch (already running) and Phase 1 turn-complete
-                # in parallel — whichever takes longer determines the wait time
-                news_done   = asyncio.wrap_future(news_future)
-                turn_waited = False
-                if self._turn_done_event:
-                    try:
-                        await asyncio.wait_for(self._turn_done_event.wait(), timeout=6.0)
-                        turn_waited = True
-                    except asyncio.TimeoutError:
-                        pass
-
-                # Extra buffer: turn_complete fires when Gemini finishes *generating*
-                # Phase 1, but audio may still be playing.  Waiting a beat here
-                # prevents Phase 2 audio from arriving while Phase 1 is mid-sentence
-                # (which sounds like a "repeated first response" to the user).
-                if turn_waited:
-                    await asyncio.sleep(0.8)
-                else:
-                    await asyncio.sleep(1.0)
-
-                try:
-                    news_text = await asyncio.wait_for(news_done, timeout=4.0)
-                except Exception:
-                    news_text = ""
-
-                if not self.session:
-                    return
-
-                if news_text and len(news_text) > 60:
-                    # Show on UI content panel immediately
-                    self.ui.show_content("NEWS — top world news today", news_text)
-
-                    p2 = (
-                        f"[BRIEFING] Here are today's top news headlines:\n{news_text}\n\n"
-                        "Pick ONE headline, summarise it in one sentence, then say the full list "
-                        f"is displayed on screen. Do not call any tools.{lang_str}"
-                    )
-                else:
-                    p2 = (
-                        "News headlines could not be fetched right now. "
-                        f"Let the user know briefly.{lang_str}"
-                    )
-
-                await self.session.send_client_content(
-                    turns={"role": "user", "parts": [{"text": p2}]},
-                    turn_complete=True,
-                )
-                self.ui.write_log("SYS: Briefing phase 2 (news) sent.")
-            except Exception as e:
-                print(f"[Briefing] Phase 2 error: {e}")
-                self.ui.write_log(f"SYS: Briefing phase 2 failed: {e}")
-
-        asyncio.create_task(_deliver_news())
+        self.ui.write_log("SYS: Goal-aware startup briefing sent.")
 
     # ── Session memory ──────────────────────────────────────────────────────────
 
