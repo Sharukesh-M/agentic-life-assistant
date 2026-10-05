@@ -65,7 +65,13 @@ def load_profile() -> dict:
             if PROFILE_PATH.exists():
                 raw = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
                 if isinstance(raw, dict):
-                    return _merge(_empty_profile(), raw)
+                    res = _merge(_empty_profile(), raw)
+                    identity = res.get("identity", {})
+                    role = res.get("role", {})
+                    important = res.get("important_context", {})
+                    if identity.get("preferred_name") or role.get("type") or important.get("user_type"):
+                        res["onboarding"]["status"] = "completed"
+                    return res
         except (OSError, ValueError, TypeError):
             pass
     return _empty_profile()

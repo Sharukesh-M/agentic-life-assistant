@@ -147,8 +147,24 @@
     <div class="enc-badge" id="enc">AES-256</div>
     <div class="spacer"></div>
     <button class="ctx-btn" onclick="showContext()">PROFILE</button>
+    <button class="ctx-btn" style="color:var(--accent); border-color:var(--accent);" onclick="toggleWorkspacePanel()">🎓 WORKSPACE</button>
+    <button class="ctx-btn" style="color:var(--green); border-color:rgba(34,197,94,0.4);" onclick="toggleCommPanel()">📞 COMM</button>
     <div class="url">__IP__:__PORT__</div>
   </header>
+  <section id="workspace-panel" style="display:none; margin:10px 16px 0; padding:12px; border:1px solid #263b52; border-radius:12px; background:#0c1622; color:#dbe8f5;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px; margin-bottom:10px;">
+      <h3 style="color:#7bdff2; font-size:13px; margin:0;">🎓 LEARNING WORKSPACE & TASK MONITOR</h3>
+      <button onclick="toggleWorkspacePanel()" style="background:none; border:none; color:#94a3b8; cursor:pointer;">✕</button>
+    </div>
+    <div id="ws-content" style="font-size:12px; max-height:220px; overflow:auto;">Loading workspace data...</div>
+  </section>
+  <section id="comm-panel" style="display:none; margin:10px 16px 0; padding:12px; border:1px solid rgba(34,197,94,0.3); border-radius:12px; background:#061412; color:#dbe8f5;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px; margin-bottom:10px;">
+      <h3 style="color:#22c55e; font-size:13px; margin:0;">📞 COMMUNICATION, CALL CONTROL & MESSAGES</h3>
+      <button onclick="toggleCommPanel()" style="background:none; border:none; color:#94a3b8; cursor:pointer;">✕</button>
+    </div>
+    <div id="comm-content" style="font-size:12px; max-height:220px; overflow:auto;">Loading communication summary...</div>
+  </section>
   <section id="goal-panel"></section>
   <main id="feed"></main>
   <footer>
@@ -272,16 +288,107 @@
       } catch (e) { sys('Unable to load personalized context.'); }
     }
 
-    function renderGoals(goals) {
-      const panel = document.getElementById('goal-panel');
-      const goal = goals.find(x => x.plan) || goals[0];
-      if (!goal) { panel.style.display = 'none'; return; }
-      const plan = goal.plan || {};
-      const tasks = (plan.milestones || []).flatMap(m => (m.tasks || []).map(t => typeof t === 'string' ? t : t.title));
-      panel.innerHTML = `<h3>ACTIVE GOAL · ${esc(goal.subject || '')}</h3>`
-        + (plan.next_task ? `<div class="next">Next task: ${esc(plan.next_task)}</div>` : '')
-        + (tasks.length ? `<ul>${tasks.slice(0, 12).map(t => `<li>${esc(t || '')}</li>`).join('')}</ul>` : '<div>No tasks generated yet.</div>');
-      panel.style.display = 'block';
+    async function toggleWorkspacePanel() {
+      const p = document.getElementById('workspace-panel');
+      if (p.style.display === 'block') {
+        p.style.display = 'none';
+      } else {
+        p.style.display = 'block';
+        await loadWorkspaceSummary();
+      }
+    }
+
+    async function loadWorkspaceSummary() {
+      const c = document.getElementById('ws-content');
+      try {
+        const r = await _authFetch('/api/workspace/summary');
+        if (!r.ok) throw new Error('Failed to load workspace summary');
+        const data = await r.json();
+        
+        let html = `<div style="display:flex; gap:16px; flex-wrap:wrap;">`;
+        
+        // Progress & Today's tasks
+        const prog = data.today_progress || {};
+        html += `<div style="flex:1; min-width:240px; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06);">`;
+        html += `<strong style="color:#22c55e;">📅 Today's Progress: ${prog.completed || 0}/${prog.total || 0} (${Math.round((prog.rate || 0)*100)}%)</strong>`;
+        
+        if (data.overdue_tasks && data.overdue_tasks.length) {
+          html += `<div style="color:#ef4444; margin-top:6px; font-size:11px;">⚠️ Overdue: ${data.overdue_tasks.length} task(s)</div>`;
+        }
+        
+        html += `<ul style="margin:6px 0 0 16px;">`;
+        (data.today_tasks || []).forEach(t => {
+          const icon = t.status === 'completed' ? '✓' : '○';
+          const style = t.status === 'completed' ? 'color:#22c55e; text-decoration:line-through;' : 'color:#cbd5e1;';
+          html += `<li style="${style}">${icon} ${esc(t.title)} (${esc(t.goal_subject || '')})</li>`;
+        });
+        if (!data.today_tasks || !data.today_tasks.length) {
+          html += `<li style="color:#64748b;">No tasks scheduled for today.</li>`;
+        }
+        html += `</ul></div>`;
+
+        // Active Goals
+        html += `<div style="flex:1; min-width:240px; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06);">`;
+        html += `<strong style="color:#6366f1;">🎯 Active Goals (${(data.goals || []).length})</strong>`;
+        html += `<ul style="margin:6px 0 0 16px;">`;
+        (data.goals || []).forEach(g => {
+          html += `<li><strong>${esc(g.subject)}</strong> [${esc(g.goal_type || 'project')}]</li>`;
+        });
+        html += `</ul></div>`;
+
+        html += `</div>`;
+        c.innerHTML = html;
+      } catch (e) {
+        c.innerHTML = `<span style="color:#ef4444;">Error loading workspace: ${esc(e.message)}</span>`;
+      }
+    }
+
+    async function toggleCommPanel() {
+      const p = document.getElementById('comm-panel');
+      if (p.style.display === 'block') {
+        p.style.display = 'none';
+      } else {
+        p.style.display = 'block';
+        await loadCommSummary();
+      }
+    }
+
+    async function loadCommSummary() {
+      const c = document.getElementById('comm-content');
+      try {
+        const r = await _authFetch('/api/comm/summary');
+        if (!r.ok) throw new Error('Failed to load comm summary');
+        const data = await r.json();
+
+        let html = `<div style="display:flex; gap:16px; flex-wrap:wrap;">`;
+
+        // Active Call & Controls
+        const act = data.active_call;
+        html += `<div style="flex:1; min-width:240px; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06);">`;
+        if (act) {
+          html += `<strong style="color:#ef4444;">🔴 ACTIVE CALL: ${esc(act.caller_name)} (${esc(act.caller_phone)})</strong>`;
+          html += `<div style="font-size:11px; margin-top:4px; color:#cbd5e1;">State: [${esc(act.state)}] Direction: ${esc(act.direction)}</div>`;
+          html += `<div style="font-size:11px; margin-top:4px; color:#94a3b8;">Conveying: "${esc(act.message_to_convey || 'None')}"</div>`;
+        } else {
+          html += `<strong style="color:#22c55e;">📞 No Active Call</strong>`;
+          html += `<div style="font-size:11px; color:#94a3b8; margin-top:4px;">JARVIS-X is ready for calls & messages.</div>`;
+        }
+        html += `</div>`;
+
+        // Paired Devices
+        html += `<div style="flex:1; min-width:240px; background:rgba(255,255,255,0.03); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06);">`;
+        html += `<strong style="color:#6366f1;">📱 Paired Devices (${(data.devices || []).length})</strong>`;
+        html += `<ul style="margin:6px 0 0 16px;">`;
+        (data.devices || []).forEach(d => {
+          html += `<li><strong>${esc(d.name)}</strong> [${esc(d.status.toUpperCase())}]</li>`;
+        });
+        html += `</ul></div>`;
+
+        html += `</div>`;
+        c.innerHTML = html;
+      } catch (e) {
+        c.innerHTML = `<span style="color:#ef4444;">Error loading communication data: ${esc(e.message)}</span>`;
+      }
     }
 
     async function refreshGoals() {

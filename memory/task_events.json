@@ -1,0 +1,74 @@
+[
+  {
+    "event_id": "eb1029f8",
+    "event_type": "TASK_CREATED",
+    "task_id": "57ce1903",
+    "goal_id": "",
+    "title": "Technical Logical Thinking Prep",
+    "timestamp": "2026-10-05T20:15:13.876760",
+    "extra": {}
+  },
+  {
+    "event_id": "a19ef37c",
+    "event_type": "TASK_CREATED",
+    "task_id": "a201b6f9",
+    "goal_id": "",
+    "title": "DSA Problem Solving",
+    "timestamp": "2026-10-05T20:15:13.807704",
+    "extra": {}
+  },
+  {
+    "event_id": "7195e00d",
+    "event_type": "TASK_CREATED",
+    "task_id": "69d4b2dc",
+    "goal_id": "",
+    "title": "Python Review",
+    "timestamp": "2026-10-05T20:15:13.764174",
+    "extra": {}
+  },
+  {
+    "event_id": "6da5cfc9",
+    "event_type": "TASK_CREATED",
+    "task_id": "8de7fd19",
+    "goal_id": "",
+    "title": "Aptitude Practice",
+    "timestamp": "2026-10-05T20:15:13.700979",
+    "extra": {}
+  },
+  {
+    "event_id": "dca25c03",
+    "event_type": "TASK_CREATED",
+    "task_id": "e96dcf73",
+    "goal_id": "",
+    "title": "Practice Technical Logical Thinking",
+    "timestamp": "2026-10-05T20:15:09.185311",
+    "extra": {}
+  },
+  {
+    "event_id": "89a50b72",
+    "event_type": "TASK_CREATED",
+    "task_id": "24fea072",
+    "goal_id": "",
+    "title": "Solve DSA Problems",
+    "timestamp": "2026-10-05T20:15:09.118091",
+    "extra": {}
+  },
+  {
+    "event_id": "c45f0865",
+    "event_type": "TASK_CREATED",
+    "task_id": "bc72fad0",
+    "goal_id": "",
+    "title": "Review Python Fundamentals",
+    "timestamp": "2026-10-05T20:15:09.050711",
+    "extra": {}
+  },
+  {
+    "event_id": "55d2c50d",
+    "event_type": "TASK_CREATED",
+    "task_id": "ccb0e704",
+    "goal_id": "",
+    "title": "Practice Aptitude Problems",
+    "timestamp": "2026-10-05T20:15:08.931219",
+    "extra": {}
+  }
+]

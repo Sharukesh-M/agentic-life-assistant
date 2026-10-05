@@ -248,6 +248,23 @@ def open_app(
     if not app_name:
         return "No application name provided."
 
+    app_lower = app_name.lower().strip()
+    if any(k in app_lower for k in ("task workspace", "learning workspace", "goal workspace", "code workspace", "quiz workspace")) or app_lower in ("workspace", "tasks", "task"):
+        try:
+            from actions.workspace_actions import handle_workspace_action
+            if "learning" in app_lower or app_lower == "workspace":
+                return handle_workspace_action({"action": "open_learning_workspace"})
+            elif "goal" in app_lower:
+                return handle_workspace_action({"action": "open_goal_workspace"})
+            elif "code" in app_lower:
+                return handle_workspace_action({"action": "open_code_workspace"})
+            elif "quiz" in app_lower:
+                return handle_workspace_action({"action": "open_quiz_workspace"})
+            else:
+                return handle_workspace_action({"action": "open_task_workspace"})
+        except Exception as e:
+            print(f"[open_app] Workspace redirect error: {e}")
+
     launcher = _OS_LAUNCHERS.get(_SYSTEM)
     if launcher is None:
         return f"Unsupported operating system: {_SYSTEM}"

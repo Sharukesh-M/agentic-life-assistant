@@ -107,7 +107,7 @@ def get_base_dir():
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-LIVE_MODEL          = "models/gemini-3.1-flash-live-preview"
+LIVE_MODEL          = "models/gemini-2.0-flash-exp"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000 
 RECEIVE_SAMPLE_RATE = 24000
@@ -453,6 +453,14 @@ class JarvisLive:
         agent_bootstrap.bootstrap(logger_fn=_orch_log)
         self._orchestrator = get_orchestrator()
 
+        try:
+            from actions.workspace_actions import register_workspace_ui_callback
+            register_workspace_ui_callback(lambda v, p: self.ui._workspace_sig.emit(v, p))
+            from actions.comm_actions import register_comm_ui_callback
+            register_comm_ui_callback(lambda v, p: self.ui._comm_sig.emit(v, p))
+        except Exception as _e:
+            print(f"[Workspace/Comm] Callback register error: {_e}")
+
         # ── Phase 5: Voice Controller & State Machine ────────────────────────
         self.voice_controller = VoiceController(session=get_app_state().session)
         self.voice_controller.on_state_change = self._on_voice_state_changed
@@ -680,22 +688,28 @@ class JarvisLive:
 
     def interrupt(self) -> None:
         """Stop JARVIS mid-speech: drain queued audio and open mic immediately."""
-        self._interrupted = True
-        q = self.audio_in_queue
-        if q:
-            drained = 0
-            while True:
-                try:
-                    q.get_nowait()
-                    drained += 1
-                except Exception:
-                    break
-            if drained:
-                print(f"[JARVIS] ✋ Interrupted — {drained} audio chunks discarded")
-        self.voice_controller.interrupt()
-        if self._turn_done_event:
-            self._turn_done_event.clear()
-        self.ui.write_log("SYS: Interrupted — listening...")
+        if getattr(self, "_in_interrupt", False):
+            return
+        self._in_interrupt = True
+        try:
+            self._interrupted = True
+            q = self.audio_in_queue
+            if q:
+                drained = 0
+                while True:
+                    try:
+                        q.get_nowait()
+                        drained += 1
+                    except Exception:
+                        break
+                if drained:
+                    print(f"[JARVIS] ✋ Interrupted — {drained} audio chunks discarded")
+            self.voice_controller.interrupt()
+            if self._turn_done_event:
+                self._turn_done_event.clear()
+            self.ui.write_log("SYS: Interrupted — listening...")
+        finally:
+            self._in_interrupt = False
 
     def speak(self, text: str):
         if not self._loop or not self.session:
@@ -1006,6 +1020,13 @@ class JarvisLive:
             response={"result": result}
         )
 
+    def _enqueue_out_audio(self, item: dict) -> None:
+        if self.out_queue is not None:
+            try:
+                self.out_queue.put_nowait(item)
+            except asyncio.QueueFull:
+                pass
+
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
@@ -1047,7 +1068,7 @@ class JarvisLive:
             if not jarvis_speaking and not self.ui.muted and not self._phone_active:
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
+                    self._enqueue_out_audio,
                     {"data": data, "mime_type": "audio/pcm"}
                 )
                 try:

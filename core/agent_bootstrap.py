@@ -21,16 +21,17 @@ from typing import Callable
 
 # Extra intent mappings beyond the Orchestrator's built-in _TOOL_INTENT_MAP
 _EXTRA_INTENT_MAP: dict[str, list[str]] = {
-    "goal_tracker":   ["goal_management", "create_goal", "list_goals",
-                       "pause_goal", "resume_goal", "abandon_goal"],
-    "personal_agent": ["goal_management", "next_step"],
-    "flashcards":     ["learning", "flashcard"],
-    "quiz_mode":      ["learning", "quiz", "record_attempt"],
-    "habit_tracker":  ["progress_tracking", "habit"],
-    "pomodoro_timer": ["task_planning", "focus_session"],
-    "calendar_plugin":["proactive_assistance", "calendar"],
-    "reminder":       ["task_planning", "reminder"],
+    "goal_tracker":     ["goal_management", "create_goal", "list_goals",
+                         "pause_goal", "resume_goal", "abandon_goal"],
+    "personal_agent":   ["goal_management", "next_step"],
+    "flashcards":       ["learning", "flashcard"],
+    "quiz_mode":        ["learning", "quiz", "record_attempt"],
+    "habit_tracker":    ["progress_tracking", "habit"],
+    "pomodoro_timer":   ["task_planning", "focus_session"],
+    "calendar_plugin":  ["proactive_assistance", "calendar"],
+    "reminder":         ["task_planning", "reminder"],
 }
+
 
 
 def bootstrap(logger_fn: Callable[[str], None] | None = None) -> None:
@@ -102,6 +103,14 @@ def bootstrap(logger_fn: Callable[[str], None] | None = None) -> None:
         registry=registry,
         module_path="agents.proactive_agent",
         class_name="ProactiveAgent",
+        logger_fn=log,
+    )
+
+    # ── Communication Agent ──────────────────────────────────────────────────
+    _register_agent(
+        registry=registry,
+        module_path="agents.communication_agent",
+        class_name="CommunicationAgent",
         logger_fn=log,
     )
 

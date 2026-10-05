@@ -479,6 +479,191 @@ class DashboardServer:
                 goals = []
             return JSONResponse({"goals": [g for g in goals if g.get("status") == "active"]})
 
+        @app.get("/api/workspace/summary")
+        async def workspace_summary_ep(req: Request):
+            """Return workspace state: tasks, goals, progress, learning concepts."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                from memory.task_store import get_task_store
+                from agents.goal_agent import GoalAgent
+                from agents.learning_agent import _load_concepts
+                
+                store = get_task_store()
+                goal_agent = GoalAgent()
+                
+                today_tasks = [t.to_dict() for t in store.today()]
+                overdue_tasks = [t.to_dict() for t in store.overdue()]
+                all_pending = [t.to_dict() for t in store.pending()]
+                goals = goal_agent._load_goals()
+                active_goals = [g for g in goals if g.get("status", "active") == "active"]
+                concepts = _load_concepts()
+
+                total_today = len(today_tasks)
+                completed_today = len([t for t in today_tasks if t.get("status") == "completed"])
+
+                return JSONResponse({
+                    "status": "ok",
+                    "today_tasks": today_tasks,
+                    "overdue_tasks": overdue_tasks,
+                    "all_pending_tasks": all_pending,
+                    "goals": active_goals,
+                    "concepts": concepts,
+                    "today_progress": {
+                        "total": total_today,
+                        "completed": completed_today,
+                        "rate": round(completed_today / total_today, 2) if total_today > 0 else 0.0,
+                    },
+                })
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.post("/api/workspace/action")
+        async def workspace_action_ep(req: Request):
+            """Execute a workspace action (start, complete, postpone, reschedule, run code, quiz)."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                data = await req.json()
+                from actions.workspace_actions import handle_workspace_action
+                result = handle_workspace_action(data)
+                return JSONResponse({"status": "ok", "result": result})
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.get("/api/comm/summary")
+        async def comm_summary_ep(req: Request):
+            """Return communication state: active call, recent calls, messages, devices, settings."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                from memory.comm_store import get_comm_store
+                store = get_comm_store()
+                active = store.get_active_call()
+                recent_calls = [c.to_dict() for c in store.get_recent_calls(limit=6)]
+                recent_msgs = [m.to_dict() for m in store.get_recent_messages(limit=6)]
+                devices = [d.to_dict() for d in store.get_devices()]
+                settings = store.get_settings()
+
+                return JSONResponse({
+                    "status": "ok",
+                    "active_call": active.to_dict() if active else None,
+                    "recent_calls": recent_calls,
+                    "recent_messages": recent_msgs,
+                    "devices": devices,
+                    "settings": settings,
+                })
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.post("/api/comm/action")
+        async def comm_action_ep(req: Request):
+            """Execute a communication action (call, send message, answer, screen, end, transfer)."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                data = await req.json()
+                from actions.comm_actions import handle_comm_action
+                result = handle_comm_action(data)
+                return JSONResponse({"status": "ok", "result": result})
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.post("/api/phone/pairing")
+        async def phone_pairing_ep(req: Request):
+            """Generate QR code pairing token for companion app."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                from memory.comm_store import get_comm_store
+                store = get_comm_store()
+                payload = store.create_pairing_token(ttl_seconds=300)
+                return JSONResponse({"status": "ok", "pairing": payload})
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.post("/api/phone/permission")
+        async def phone_permission_ep(req: Request):
+            """Grant or revoke a phone capability permission."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                data = await req.json()
+                dev_id = data.get("device_id", "dev_phone_1")
+                perm = data.get("permission", "PHONE_CALLS")
+                grant = bool(data.get("grant", True))
+                from memory.comm_store import get_comm_store
+                store = get_comm_store()
+                dev = store.update_device_permission(dev_id, perm, grant)
+                return JSONResponse({"status": "ok", "device": dev.to_dict() if dev else None})
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.post("/api/phone/action")
+        async def phone_action_ep(req: Request):
+            """Execute a phone bridge tool action."""
+            if not _auth(req):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            try:
+                data = await req.json()
+                from actions.phone_bridge import handle_phone_bridge_action
+                result = handle_phone_bridge_action(data)
+                return JSONResponse({"status": "ok", "result": result})
+            except Exception as exc:
+                return JSONResponse({"error": str(exc)}, status_code=500)
+
+        @app.websocket("/ws/phone_bridge")
+        async def phone_bridge_ws(websocket: WebSocket):
+            """Authenticated WebSocket handler for Android Phone Bridge companion app."""
+            await websocket.accept()
+            device_id = None
+            try:
+                from memory.comm_store import get_comm_store
+                store = get_comm_store()
+                while True:
+                    text_msg = await websocket.receive_text()
+                    data = json.loads(text_msg)
+                    msg_type = data.get("type", "")
+
+                    if msg_type == "pair_request":
+                        token = data.get("pairing_token", "")
+                        name = data.get("device_name", "Android Companion Phone")
+                        res = store.verify_pairing_token(token, name)
+                        if res.get("success"):
+                            device_id = res["device_id"]
+                            await websocket.send_text(json.dumps({
+                                "type": "pair_response",
+                                "status": "success",
+                                "device_id": device_id,
+                                "auth_token": res["auth_token"]
+                            }))
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "pair_response",
+                                "status": "failed",
+                                "error": res.get("error", "Pairing failed")
+                            }))
+
+                    elif msg_type == "heartbeat":
+                        device_id = data.get("device_id", device_id or "dev_phone_1")
+                        batt = int(data.get("battery_level", 85))
+                        net = data.get("network_type", "Wi-Fi")
+                        store.update_device_status(device_id, "online", batt, net)
+                        await websocket.send_text(json.dumps({"type": "heartbeat_ack", "timestamp": datetime.now().isoformat()}))
+
+                    elif msg_type == "call_state_change":
+                        call_state = data.get("state", "IDLE")
+                        caller = data.get("caller_name", "Unknown")
+                        phone = data.get("caller_phone", "")
+                        store.update_call_state(call_state, {"speaker": "System", "text": f"Call state changed to {call_state}"})
+                        await websocket.send_text(json.dumps({"type": "ack", "request_id": data.get("request_id", "")}))
+
+            except WebSocketDisconnect:
+                if device_id:
+                    store.update_device_status(device_id, "offline")
+            except Exception as e:
+                print(f"[PhoneBridgeWS] Error: {e}")
+
         # serve CryptoJS from local cache, fallback to CDN redirect
         @app.get("/static/crypto.js")
         async def serve_crypto():

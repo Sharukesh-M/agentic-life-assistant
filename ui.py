@@ -2164,6 +2164,511 @@ class MemoryOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild)
 
 
+# ---------------------------------------------------------------------------
+# TaskPanelWidget & LearningWorkspaceOverlay
+# ---------------------------------------------------------------------------
+
+class TaskPanelWidget(QWidget):
+    """Persistent Today's Tasks & Overdue Widget for JARVIS-X UI sidebar."""
+    def __init__(self, parent=None, on_open_workspace=None):
+        super().__init__(parent)
+        self.on_open_workspace = on_open_workspace
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(4, 4, 4, 4)
+        self._lay.setSpacing(4)
+        self.refresh()
+
+    def refresh(self):
+        while self._lay.count():
+            item = self._lay.takeAt(0)
+            w = item.widget()
+            if w:
+                w.hide()
+                w.deleteLater()
+        
+        try:
+            from memory.task_store import get_task_store
+            store = get_task_store()
+            today_tasks = store.today()
+            overdue = store.overdue()
+            
+            completed_count = len([t for t in today_tasks if t.status == "completed"])
+            total_count = len(today_tasks)
+            pct = int((completed_count / total_count * 100)) if total_count > 0 else 0
+            
+            hdr = QLabel(f"📋 TODAY'S TASKS ({completed_count}/{total_count} · {pct}%)")
+            hdr.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+            self._lay.addWidget(hdr)
+
+            pbar = QProgressBar()
+            pbar.setFixedHeight(6)
+            pbar.setRange(0, 100)
+            pbar.setValue(pct)
+            pbar.setTextVisible(False)
+            pbar.setStyleSheet(f"""
+                QProgressBar {{ background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+                QProgressBar::chunk {{ background: {C.GREEN}; border-radius: 2px; }}
+            """)
+            self._lay.addWidget(pbar)
+
+            if overdue:
+                ov_box = QFrame()
+                ov_box.setStyleSheet(f"background: #20050a; border: 1px solid {C.RED}; border-radius: 4px; padding: 4px;")
+                ov_lay = QVBoxLayout(ov_box)
+                ov_lay.setContentsMargins(4, 4, 4, 4)
+                ov_lay.setSpacing(2)
+                
+                ov_lbl = QLabel(f"⚠️ OVERDUE ({len(overdue)})")
+                ov_lbl.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+                ov_lbl.setStyleSheet(f"color: {C.RED};")
+                ov_lay.addWidget(ov_lbl)
+
+                for t in overdue[:2]:
+                    row = QLabel(f"• {t.title} [{t.goal_subject}]")
+                    row.setFont(QFont("Courier New", 7))
+                    row.setStyleSheet(f"color: {C.TEXT_MED};")
+                    row.setWordWrap(True)
+                    ov_lay.addWidget(row)
+
+                self._lay.addWidget(ov_box)
+
+            if not today_tasks and not overdue:
+                empty = QLabel("No tasks scheduled for today.\nAsk JARVIS to plan your day!")
+                empty.setFont(QFont("Courier New", 7))
+                empty.setStyleSheet(f"color: {C.TEXT_DIM};")
+                self._lay.addWidget(empty)
+            else:
+                for t in today_tasks[:4]:
+                    st_icon = "✓" if t.status == "completed" else ("▶" if t.status == "in_progress" else "○")
+                    st_col = C.GREEN if t.status == "completed" else (C.ACC2 if t.status == "in_progress" else C.TEXT)
+                    
+                    t_lbl = QLabel(f"{st_icon} {t.title}")
+                    t_lbl.setFont(QFont("Courier New", 8))
+                    t_lbl.setStyleSheet(f"color: {st_col};")
+                    t_lbl.setWordWrap(True)
+                    self._lay.addWidget(t_lbl)
+
+            ws_btn = QPushButton("🚀 OPEN WORKSPACE")
+            ws_btn.setFixedHeight(24)
+            ws_btn.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            ws_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            ws_btn.setStyleSheet(f"""
+                QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI_DIM}; border-radius: 3px; }}
+                QPushButton:hover {{ background: {C.PRI_DIM}; color: {C.WHITE}; }}
+            """)
+            if self.on_open_workspace:
+                ws_btn.clicked.connect(self.on_open_workspace)
+            self._lay.addWidget(ws_btn)
+
+        except Exception as e:
+            err = QLabel(f"Tasks error: {e}")
+            err.setFont(QFont("Courier New", 7))
+            self._lay.addWidget(err)
+
+
+class LearningWorkspaceOverlay(_HudOverlay):
+    """JARVIS-X Goal Planning & Dedicated Learning Workspace Overlay."""
+    _OW = 740
+    _OH = 540
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            LearningWorkspaceOverlay {{
+                background: rgba(1, 13, 20, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedSize(self._OW, self._OH)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(16, 14, 16, 14)
+        self._lay.setSpacing(8)
+
+        self._build_ui()
+
+    def _build_ui(self):
+        hdr_lay = QHBoxLayout()
+        title = QLabel("🎓 JARVIS-X WORKSPACE & LEARNING STUDIO")
+        title.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        hdr_lay.addWidget(title)
+
+        hdr_lay.addStretch()
+
+        close_btn = QPushButton("✕ CLOSE")
+        close_btn.setFixedSize(70, 24)
+        close_btn.setFont(QFont("Courier New", 8))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(close_btn)
+        self._lay.addLayout(hdr_lay)
+
+        tab_lay = QHBoxLayout()
+        self._btn_goals = QPushButton("🎯 ACTIVE GOALS")
+        self._btn_tasks = QPushButton("📋 TODAY'S TASKS")
+        self._btn_code  = QPushButton("💻 CODE STUDIO")
+        self._btn_quiz  = QPushButton("📝 QUIZ & REVIEWS")
+
+        for btn in (self._btn_goals, self._btn_tasks, self._btn_code, self._btn_quiz):
+            btn.setFixedHeight(26)
+            btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+            """)
+            tab_lay.addWidget(btn)
+        self._lay.addLayout(tab_lay)
+
+        self._stack = QStackedWidget()
+        
+        self._page_goals = self._build_goals_page()
+        self._stack.addWidget(self._page_goals)
+
+        self._page_tasks = self._build_tasks_page()
+        self._stack.addWidget(self._page_tasks)
+
+        self._page_code = self._build_code_page()
+        self._stack.addWidget(self._page_code)
+
+        self._page_quiz = self._build_quiz_page()
+        self._stack.addWidget(self._page_quiz)
+
+        self._lay.addWidget(self._stack, stretch=1)
+
+        self._btn_goals.clicked.connect(lambda: self._switch_tab(0))
+        self._btn_tasks.clicked.connect(lambda: self._switch_tab(1))
+        self._btn_code.clicked.connect(lambda: self._switch_tab(2))
+        self._btn_quiz.clicked.connect(lambda: self._switch_tab(3))
+        self._switch_tab(0)
+
+    def _switch_tab(self, idx):
+        self._stack.setCurrentIndex(idx)
+        btns = [self._btn_goals, self._btn_tasks, self._btn_code, self._btn_quiz]
+        for i, b in enumerate(btns):
+            if i == idx:
+                b.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                b.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+
+    def _build_goals_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+        
+        try:
+            from agents.goal_agent import GoalAgent
+            g_agent = GoalAgent()
+            goals = g_agent._load_goals()
+            lines = ["=== ACTIVE GOALS & MASTER ROADMAPS ===\n"]
+            for g in goals:
+                lines.append(f"📌 GOAL: {g.get('subject')} [{g.get('status', 'active').upper()}]")
+                lines.append(f"   Created: {g.get('created', '')[:10]}")
+                plan = g.get("plan") or {}
+                milestones = plan.get("milestones") or []
+                if milestones:
+                    lines.append("   Milestones:")
+                    for ms in milestones:
+                        m_title = ms.get("title") if isinstance(ms, dict) else str(ms)
+                        lines.append(f"     • {m_title}")
+                lines.append("")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Goals error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+    def _build_tasks_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+        
+        try:
+            from memory.task_store import get_task_store
+            store = get_task_store()
+            today_t = store.today()
+            overdue_t = store.overdue()
+            lines = ["=== TODAY'S WORKSPACE TASKS ===\n"]
+            if overdue_t:
+                lines.append("⚠️ OVERDUE TASKS:")
+                for t in overdue_t:
+                    lines.append(f"  • [{t.id}] {t.title} ({t.goal_subject}) — {t.duration_minutes}m")
+                lines.append("")
+            lines.append("📅 TODAY'S TASKS:")
+            for t in today_t:
+                st = "✓ DONE" if t.status == "completed" else ("▶ IN PROGRESS" if t.status == "in_progress" else "○ PENDING")
+                lines.append(f"  • [{t.id}] {t.title} ({t.goal_subject}) — {st}")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Tasks error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+    def _build_code_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        
+        lbl = QLabel("Python Learning Code Studio (Write & Run Code with AI Feedback):")
+        lbl.setFont(QFont("Courier New", 8))
+        lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+        lay.addWidget(lbl)
+
+        self.code_edit = QTextEdit()
+        self.code_edit.setPlaceholderText("# Write Python code here...\ndef greet(name):\n    return f'Hello, {name}!'\n\nprint(greet('JARVIS User'))")
+        self.code_edit.setStyleSheet(f"background: {C.PANEL2}; color: {C.GREEN}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 11px;")
+        lay.addWidget(self.code_edit, stretch=2)
+
+        run_btn = QPushButton("▶ RUN CODE")
+        run_btn.setFixedHeight(28)
+        run_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        run_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 3px;")
+        lay.addWidget(run_btn)
+
+        self.code_output = QTextEdit()
+        self.code_output.setReadOnly(True)
+        self.code_output.setPlaceholderText("Output will appear here...")
+        self.code_output.setStyleSheet(f"background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 10px;")
+        lay.addWidget(self.code_output, stretch=1)
+
+        def _run():
+            code = self.code_edit.toPlainText()
+            from actions.workspace_actions import handle_workspace_action
+            out = handle_workspace_action({"action": "run_workspace_code", "code": code})
+            self.code_output.setText(out)
+
+        run_btn.clicked.connect(_run)
+        return w
+
+    def _build_quiz_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+        
+        try:
+            from agents.learning_agent import _load_concepts
+            concepts = _load_concepts()
+            lines = ["=== LEARNING CONCEPTS & MASTERY REVIEWS ===\n"]
+            for c in concepts:
+                line = f"• Concept: {c.get('concept')} [{c.get('level')}] — Goal: {c.get('goal_subject')}"
+                lines.append(line)
+                lines.append(f"  Attempts: {c.get('attempts')}, Successes: {c.get('successes')}")
+                lines.append("")
+            if not concepts:
+                lines.append("No active quiz sessions. Start a learning session with JARVIS!")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Quiz error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+
+class CommunicationOverlay(_HudOverlay):
+    """JARVIS-X Communication, Call Control & Messaging Overlay."""
+    _OW = 740
+    _OH = 540
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            CommunicationOverlay {{
+                background: rgba(1, 13, 20, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedSize(self._OW, self._OH)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(16, 14, 16, 14)
+        self._lay.setSpacing(8)
+
+        self._build_ui()
+
+    def _build_ui(self):
+        hdr_lay = QHBoxLayout()
+        title = QLabel("📞 JARVIS-X COMMUNICATION & CALL CONTROL")
+        title.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        hdr_lay.addWidget(title)
+
+        hdr_lay.addStretch()
+
+        close_btn = QPushButton("✕ CLOSE")
+        close_btn.setFixedSize(70, 24)
+        close_btn.setFont(QFont("Courier New", 8))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(close_btn)
+        self._lay.addLayout(hdr_lay)
+
+        tab_lay = QHBoxLayout()
+        self._btn_calls = QPushButton("📞 CALL CONTROL")
+        self._btn_msgs  = QPushButton("💬 MESSAGES")
+        self._btn_devs  = QPushButton("📱 PAIRED DEVICES")
+        self._btn_sets  = QPushButton("⚙️ POLICY SETTINGS")
+
+        for btn in (self._btn_calls, self._btn_msgs, self._btn_devs, self._btn_sets):
+            btn.setFixedHeight(26)
+            btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+            """)
+            tab_lay.addWidget(btn)
+        self._lay.addLayout(tab_lay)
+
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_calls_page())
+        self._stack.addWidget(self._build_msgs_page())
+        self._stack.addWidget(self._build_devs_page())
+        self._stack.addWidget(self._build_sets_page())
+
+        self._lay.addWidget(self._stack, stretch=1)
+
+        self._btn_calls.clicked.connect(lambda: self._switch_tab(0))
+        self._btn_msgs.clicked.connect(lambda: self._switch_tab(1))
+        self._btn_devs.clicked.connect(lambda: self._switch_tab(2))
+        self._btn_sets.clicked.connect(lambda: self._switch_tab(3))
+        self._switch_tab(0)
+
+    def _switch_tab(self, idx):
+        self._stack.setCurrentIndex(idx)
+        btns = [self._btn_calls, self._btn_msgs, self._btn_devs, self._btn_sets]
+        for i, b in enumerate(btns):
+            if i == idx:
+                b.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                b.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+
+    def _build_calls_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+
+        try:
+            from memory.comm_store import get_comm_store
+            store = get_comm_store()
+            active = store.get_active_call()
+            calls = store.get_recent_calls()
+
+            lines = ["=== ACTIVE CALL STATE & CONTROL ===\n"]
+            if active:
+                lines.append(f"🔴 ACTIVE CALL: {active.caller_name} ({active.caller_phone})")
+                lines.append(f"   State: [{active.state}] Direction: {active.direction.upper()}")
+                lines.append(f"   Message to Convey: \"{active.message_to_convey or 'None'}\"")
+                lines.append("")
+            else:
+                lines.append("No active call in progress.\n")
+
+            lines.append("=== RECENT CALL LOGS & AI SUMMARIES ===")
+            for c in calls:
+                lines.append(f"• {c.direction.upper()} call with {c.caller_name} ({c.caller_phone}) — {c.start_time[:16]}")
+                lines.append(f"  Summary: {c.summary}")
+                lines.append("")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Calls error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+    def _build_msgs_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+
+        try:
+            from memory.comm_store import get_comm_store
+            store = get_comm_store()
+            msgs = store.get_recent_messages()
+            lines = ["=== RECENT MESSAGES (WHATSAPP / SMS) ===\n"]
+            for m in msgs:
+                sens = " [SENSITIVE-CONFIRMED]" if m.is_sensitive else ""
+                lines.append(f"• [{m.channel.upper()}] to {m.recipient_name}: \"{m.content}\"{sens}")
+                lines.append(f"  Status: {m.status} · Time: {m.timestamp[:16]}")
+                lines.append("")
+            if not msgs:
+                lines.append("No recent messages logged.")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Messages error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+    def _build_devs_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+
+        try:
+            from memory.comm_store import get_comm_store
+            store = get_comm_store()
+            devs = store.get_devices()
+            lines = ["=== AUTHORIZED DEVICE REGISTRY ===\n"]
+            for d in devs:
+                lines.append(f"📱 DEVICE: {d.name} [{d.status.upper()}]")
+                lines.append(f"   ID: {d.id} · Type: {d.type}")
+                lines.append(f"   Permissions: {', '.join(d.permissions)}")
+                lines.append("")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Devices error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+    def _build_sets_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+
+        try:
+            from memory.comm_store import get_comm_store
+            store = get_comm_store()
+            s = store.get_settings()
+            lines = ["=== CALL HANDLING & PRIVACY POLICIES ===\n"]
+            lines.append(f"• Call Handling Mode: {s.get('call_handling_mode', 'ASSISTANT')}")
+            lines.append(f"• Unknown Caller Policy: {s.get('unknown_caller_policy', 'SCREEN')}")
+            lines.append(f"• Require Sensitive Confirmation: {s.get('require_sensitive_confirmation', True)}")
+            lines.append("\nModes available: MANUAL, SCREENING, ASSISTANT, FULL_DELEGATION")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Settings error: {e}")
+
+        lay.addWidget(txt)
+        return w
+
+
 class ClipboardPanel(QWidget):
     """Floating panel shown when text is copied — offers quick Jarvis actions."""
 
@@ -2746,6 +3251,8 @@ class MainWindow(QMainWindow):
     _confirm_sig    = pyqtSignal(str, str)   # (title, detail) — irreversible-action gate
     _confirm_hide_sig = pyqtSignal()
     _wake_dl_sig    = pyqtSignal(bool, str)  # wake-word install finished (ok, message)
+    _workspace_sig  = pyqtSignal(str, dict)  # (view_name, payload) — trigger workspace UI
+    _comm_sig       = pyqtSignal(str, dict)  # (view_name, payload) — trigger comm UI
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -2786,6 +3293,10 @@ class MainWindow(QMainWindow):
         self._current_file: str | None = None
         self._remote_overlay: RemoteKeyOverlay | None = None
         self._customize_overlay: CustomizeOverlay | None = None
+        self._workspace_overlay: LearningWorkspaceOverlay | None = None
+        self._workspace_sig.connect(self._on_workspace_signal)
+        self._comm_overlay: CommunicationOverlay | None = None
+        self._comm_sig.connect(self._on_comm_signal)
 
         central = QWidget()
         central.setStyleSheet(f"background: {C.BG};")
@@ -3467,6 +3978,36 @@ class MainWindow(QMainWindow):
         self._drawer_btn.setCheckable(True)
         self._drawer_btn.clicked.connect(self._toggle_drawer)
         lay.addWidget(self._drawer_btn)
+
+        self._ws_hdr_btn = QPushButton("🎓 WORKSPACE")
+        self._ws_hdr_btn.setFixedHeight(26)
+        self._ws_hdr_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self._ws_hdr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ws_hdr_btn.setToolTip("Open Learning & Task Workspace")
+        self._ws_hdr_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PRI_GHO}; color: {C.PRI};
+                border: 1px solid {C.PRI_DIM}; border-radius: 4px; padding: 0 8px;
+            }}
+            QPushButton:hover {{ color: {C.WHITE}; border-color: {C.PRI}; background: {C.PRI_DIM}; }}
+        """)
+        self._ws_hdr_btn.clicked.connect(lambda: self.show_learning_workspace(0))
+        lay.addWidget(self._ws_hdr_btn)
+
+        self._comm_hdr_btn = QPushButton("📞 COMM")
+        self._comm_hdr_btn.setFixedHeight(26)
+        self._comm_hdr_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self._comm_hdr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._comm_hdr_btn.setToolTip("Open Communication & Call Control")
+        self._comm_hdr_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PRI_GHO}; color: {C.GREEN};
+                border: 1px solid {C.GREEN_D}; border-radius: 4px; padding: 0 8px;
+            }}
+            QPushButton:hover {{ color: {C.WHITE}; border-color: {C.GREEN}; background: {C.GREEN_D}; }}
+        """)
+        self._comm_hdr_btn.clicked.connect(lambda: self.show_comm_overlay(0))
+        lay.addWidget(self._comm_hdr_btn)
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -3593,6 +4134,13 @@ class MainWindow(QMainWindow):
         lay.addWidget(_sec("ACTIVITY LOG"))
         self._log = LogWidget()
         lay.addWidget(self._log, stretch=1)
+
+        sep0 = QFrame(); sep0.setFrameShape(QFrame.Shape.HLine)
+        sep0.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
+        lay.addWidget(sep0)
+
+        self._task_widget = TaskPanelWidget(on_open_workspace=lambda: self.show_learning_workspace(0))
+        lay.addWidget(self._task_widget)
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
@@ -4346,6 +4894,54 @@ class MainWindow(QMainWindow):
         ov = MemoryOverlay(parent=self.centralWidget())
         self._centre_overlay(ov)
         self._memory_overlay = ov
+
+    # ── Learning & Workspace overlay ─────────────────────────────────────────
+
+    def show_learning_workspace(self, tab_idx: int = 0):
+        if hasattr(self, "_workspace_overlay") and self._workspace_overlay and not self._workspace_overlay.isHidden():
+            self._workspace_overlay._switch_tab(tab_idx)
+            self._workspace_overlay.raise_()
+            self._workspace_overlay.activateWindow()
+            return
+        ov = LearningWorkspaceOverlay(parent=self.centralWidget())
+        ov._switch_tab(tab_idx)
+        self._centre_overlay(ov)
+        self._workspace_overlay = ov
+        ov.show()
+
+    def _on_workspace_signal(self, view_name: str, payload: dict):
+        if hasattr(self, "_task_widget") and self._task_widget:
+            self._task_widget.refresh()
+        if view_name == "refresh_widget":
+            return
+        tab_idx = 0
+        if view_name in ("task_workspace", "open_task", "open_today_tasks"):
+            tab_idx = 1
+        elif view_name == "code_workspace":
+            tab_idx = 2
+        elif view_name == "quiz_workspace":
+            tab_idx = 3
+        elif view_name in ("learning_workspace", "goal_workspace"):
+            tab_idx = 0
+        self.show_learning_workspace(tab_idx)
+
+    # ── Communication & Call Control overlay ──────────────────────────────────
+
+    def show_comm_overlay(self, tab_idx: int = 0):
+        ov = CommunicationOverlay(parent=self.centralWidget())
+        ov._switch_tab(tab_idx)
+        self._centre_overlay(ov)
+        self._comm_overlay = ov
+
+    def _on_comm_signal(self, view_name: str, payload: dict):
+        tab_idx = 0
+        if view_name in ("message_sent", "recent_messages"):
+            tab_idx = 1
+        elif view_name == "paired_devices":
+            tab_idx = 2
+        elif view_name == "settings_updated":
+            tab_idx = 3
+        self.show_comm_overlay(tab_idx)
 
     # ── Irreversible-action confirmation ─────────────────────────────────────
 

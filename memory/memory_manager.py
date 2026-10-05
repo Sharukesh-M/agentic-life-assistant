@@ -417,7 +417,12 @@ def forget(key: str, category: str = "notes") -> str:
         memory[category] = cat
         save_memory(memory)
         return f"Forgotten: {category}/{key}"
-    return f"Not found: {category}/{key}"
+def clear_memory() -> dict:
+    empty = _empty_memory()
+    empty["sessions"] = []
+    save_memory(empty)
+    print("[Memory] 🧹 Long-term memory cleared.")
+    return empty
 
 
 forget_memory = forget

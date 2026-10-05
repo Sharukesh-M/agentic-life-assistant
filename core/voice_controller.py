@@ -33,9 +33,9 @@ logger = logging.getLogger("jarvis.voice_controller")
 # Barge-in detection config
 # ---------------------------------------------------------------------------
 
-BARGE_IN_RMS_THRESHOLD = 200.0   # RMS above which mic audio counts as speech
-BARGE_IN_HOLD_MS       = 200     # ms of continuous speech to confirm barge-in
-BARGE_IN_COOLDOWN_S    = 1.5     # seconds after barge-in before it can fire again
+BARGE_IN_RMS_THRESHOLD = 1500.0   # RMS above which mic audio counts as speech (prevents ambient noise triggers)
+BARGE_IN_HOLD_MS       = 350      # ms of continuous speech to confirm barge-in
+BARGE_IN_COOLDOWN_S    = 2.0      # seconds after barge-in before it can fire again
 
 
 # ---------------------------------------------------------------------------
@@ -139,16 +139,26 @@ class VoiceController:
         self.transition(VoiceStateEnum.RESPONDING)
 
     def interrupt(self) -> None:
-        """Barge-in: user started speaking while JARVIS was talking.
+        """Barge-in / interruption state transition.
 
         Sets state to INTERRUPTED then immediately to LISTENING.
         The caller is responsible for draining audio_in_queue.
         """
-        self._barge_in_armed = False
-        self._last_barge_in = time.monotonic()
-        self.force(VoiceStateEnum.INTERRUPTED)
-        self.transition(VoiceStateEnum.LISTENING)
-        self._log("[VoiceController] Barge-in: interrupted -> listening")
+        if getattr(self, "_in_interrupt", False):
+            return
+        self._in_interrupt = True
+        try:
+            self._barge_in_armed = False
+            self._last_barge_in = time.monotonic()
+            self.force(VoiceStateEnum.INTERRUPTED)
+            self.transition(VoiceStateEnum.LISTENING)
+            self._log("[VoiceController] Interrupted -> listening")
+        finally:
+            self._in_interrupt = False
+
+    def trigger_barge_in(self) -> None:
+        """Fired specifically when sustained user speech is detected while speaking."""
+        self.interrupt()
         if self.on_barge_in:
             try:
                 self.on_barge_in()
@@ -174,10 +184,6 @@ class VoiceController:
 
         Called from the sounddevice audio callback thread (must be fast).
         Detects sustained speech while JARVIS is speaking and fires barge-in.
-
-        Integration in main.py (Phase 5):
-            In the mic callback, after computing _pcm_level(), call:
-                voice_controller.feed_mic_level(rms_value)
         """
         if not self._barge_in_armed:
             return
@@ -192,7 +198,7 @@ class VoiceController:
             elif (time.monotonic() - self._barge_speech_start) * 1000 >= BARGE_IN_HOLD_MS:
                 # Sustained speech confirmed -- fire barge-in
                 self._barge_speech_start = 0.0
-                self.interrupt()
+                self.trigger_barge_in()
         else:
             # Reset the hold counter if speech dropped below threshold
             self._barge_speech_start = 0.0
