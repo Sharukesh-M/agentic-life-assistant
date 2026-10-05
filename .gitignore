@@ -5,7 +5,7 @@
 # never be.
 .env
 config/api_keys.json
-readme.md
+
 mark53
 # ── Secrets. Committing any of these publishes them. ──────────────────────────
 config/api_keys.json          # your Gemini API key, plus per-plugin credentials
