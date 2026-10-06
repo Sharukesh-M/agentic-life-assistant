@@ -56,6 +56,7 @@ _LEGAL_TRANSITIONS: dict[VoiceStateEnum, set[VoiceStateEnum]] = {
         VoiceStateEnum.SLEEPING,
     },
     VoiceStateEnum.LISTENING: {
+        VoiceStateEnum.LISTENING,
         VoiceStateEnum.USER_SPEAKING,
         VoiceStateEnum.SLEEPING,
         VoiceStateEnum.THINKING,
