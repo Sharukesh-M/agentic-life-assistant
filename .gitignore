@@ -5,6 +5,7 @@
 # never be.
 .env
 config/api_keys.json
+sharu312
 
 mark53
 # ── Secrets. Committing any of these publishes them. ──────────────────────────

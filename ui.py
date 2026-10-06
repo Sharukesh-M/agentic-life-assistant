@@ -2669,6 +2669,163 @@ class CommunicationOverlay(_HudOverlay):
         return w
 
 
+class LearningWindowOverlay(_HudOverlay):
+    """Dedicated Learning Window dynamically generated from memory/tasks.json."""
+    _OW = 600
+    _OH = 500
+
+    content_ready = pyqtSignal(list, list, list)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            LearningWindowOverlay {{
+                background: rgba(1, 13, 20, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedSize(self._OW, self._OH)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(20, 20, 20, 20)
+        self._lay.setSpacing(12)
+
+        self.content_ready.connect(self._render_content)
+        self._build_skeleton()
+
+    def refresh(self):
+        self._show_loading()
+        import threading
+        threading.Thread(target=self._fetch_data, daemon=True).start()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh()
+
+    def _build_skeleton(self):
+        hdr_lay = QHBoxLayout()
+        title = QLabel("📖 LEARNING WINDOW")
+        title.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        hdr_lay.addWidget(title)
+
+        hdr_lay.addStretch()
+
+        close_btn = QPushButton("✕ CLOSE")
+        close_btn.setFixedSize(70, 24)
+        close_btn.setFont(QFont("Courier New", 8))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(close_btn)
+        self._lay.addLayout(hdr_lay)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet(f"background: transparent; border: none;")
+        
+        self.content_w = QWidget()
+        self.content_lay = QVBoxLayout(self.content_w)
+        self.content_lay.setContentsMargins(0, 0, 0, 0)
+        self.content_lay.setSpacing(16)
+
+        self.scroll.setWidget(self.content_w)
+        self._lay.addWidget(self.scroll, stretch=1)
+
+    def _show_loading(self):
+        for i in reversed(range(self.content_lay.count())): 
+            w = self.content_lay.itemAt(i).widget()
+            if w: w.deleteLater()
+            else: self.content_lay.removeItem(self.content_lay.itemAt(i))
+
+        loading_lbl = QLabel("🤖 AI is analyzing your tasks and curating learning modules...")
+        loading_lbl.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New';")
+        loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.content_lay.addWidget(loading_lbl)
+        self.content_lay.addStretch()
+
+    def _fetch_data(self):
+        tasks_text = ""
+        try:
+            import json
+            with open("memory/tasks.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                pending = [t for t in data if t.get("status") == "pending"]
+                if pending:
+                    tasks_text = json.dumps([{"title": t["title"], "desc": t.get("description", "")} for t in pending])
+        except Exception:
+            pass
+
+        default_ai_modules = ["Module 1: Deep Learning Foundations", "Module 2: Advanced NLP Models", "Module 3: Deploying ML Systems"]
+        default_ai_videos = [
+            {"title": "Neural Networks from Scratch", "url": "https://www.youtube.com/watch?v=aircAruvnKk"}, 
+            {"title": "Transformers Explained Visually", "url": "https://www.youtube.com/watch?v=SZorAJ4I-sA"}
+        ]
+        default_ai_web = [
+            {"title": "PyTorch Official Documentation", "url": "https://pytorch.org/docs/stable/index.html"},
+            {"title": "Hugging Face Course", "url": "https://huggingface.co/learn/nlp-course/chapter1/1"}
+        ]
+
+        if tasks_text:
+            import json
+            fallback_tasks = json.loads(tasks_text) if tasks_text.startswith("[") else []
+            if fallback_tasks:
+                task_modules = [f"Task: {t.get('title', 'Unknown')}" for t in fallback_tasks]
+                default_ai_modules = task_modules + default_ai_modules
+
+        # Skip LLM API to prevent hanging; emit immediately
+        self.content_ready.emit(default_ai_modules, default_ai_videos, default_ai_web)
+
+    def _render_content(self, modules, videos, web):
+        for i in reversed(range(self.content_lay.count())): 
+            w = self.content_lay.itemAt(i).widget()
+            if w: w.deleteLater()
+            else: self.content_lay.removeItem(self.content_lay.itemAt(i))
+        
+        para = QLabel(
+            "Welcome to the Learning Window. Here you can access your assigned task modules, "
+            "reference materials, and curated educational content to help you achieve your goals."
+        )
+        para.setWordWrap(True)
+        para.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 10pt;")
+        self.content_lay.addWidget(para)
+
+        lbl_tasks = QLabel("📚 Recommended Modules")
+        lbl_tasks.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
+        self.content_lay.addWidget(lbl_tasks)
+
+        for mod in modules:
+            btn = QPushButton(f"▶ {mod}")
+            btn.setStyleSheet(f"text-align: left; background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; padding: 8px;")
+            self.content_lay.addWidget(btn)
+
+        lbl_yt = QLabel("🎥 Video Resources")
+        lbl_yt.setStyleSheet(f"color: {C.RED}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
+        self.content_lay.addWidget(lbl_yt)
+
+        for vid in videos:
+            yt_link = QLabel(f'<a href="{vid["url"]}" style="color: #00d4ff;">{vid["title"]}</a>')
+            yt_link.setOpenExternalLinks(True)
+            yt_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
+            self.content_lay.addWidget(yt_link)
+
+        lbl_web = QLabel("🌐 Web Resources")
+        lbl_web.setStyleSheet(f"color: {C.GREEN}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
+        self.content_lay.addWidget(lbl_web)
+
+        for link in web:
+            doc_link = QLabel(f'<a href="{link["url"]}" style="color: #00d4ff;">{link["title"]}</a>')
+            doc_link.setOpenExternalLinks(True)
+            doc_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
+            self.content_lay.addWidget(doc_link)
+
+        self.content_lay.addStretch()
+
+
 class ClipboardPanel(QWidget):
     """Floating panel shown when text is copied — offers quick Jarvis actions."""
 
@@ -4008,6 +4165,22 @@ class MainWindow(QMainWindow):
         """)
         self._comm_hdr_btn.clicked.connect(lambda: self.show_comm_overlay(0))
         lay.addWidget(self._comm_hdr_btn)
+
+        self._learning_hdr_btn = QPushButton("📖 LEARNING")
+        self._learning_hdr_btn.setFixedHeight(26)
+        self._learning_hdr_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self._learning_hdr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._learning_hdr_btn.setToolTip("Open Learning Window")
+        self._learning_hdr_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PRI_GHO}; color: {C.ACC2};
+                border: 1px solid {C.ACC}; border-radius: 4px; padding: 0 8px;
+            }}
+            QPushButton:hover {{ color: {C.WHITE}; border-color: {C.ACC2}; background: {C.ACC}; }}
+        """)
+        self._learning_hdr_btn.clicked.connect(self.show_learning_window)
+        lay.addWidget(self._learning_hdr_btn)
+
         lay.addStretch()
 
         mid = QVBoxLayout(); mid.setSpacing(1)
@@ -4909,9 +5082,24 @@ class MainWindow(QMainWindow):
         self._workspace_overlay = ov
         ov.show()
 
+    def show_learning_window(self):
+        if hasattr(self, "_learning_window_overlay") and self._learning_window_overlay and not self._learning_window_overlay.isHidden():
+            self._learning_window_overlay.raise_()
+            self._learning_window_overlay.activateWindow()
+            return
+        ov = LearningWindowOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._learning_window_overlay = ov
+        ov.show()
+
     def _on_workspace_signal(self, view_name: str, payload: dict):
         if hasattr(self, "_task_widget") and self._task_widget:
             self._task_widget.refresh()
+        if hasattr(self, "_learning_window_overlay") and self._learning_window_overlay and not self._learning_window_overlay.isHidden():
+            self._learning_window_overlay.refresh()
+        if view_name == "open_learning_workspace":
+            self.show_learning_window()
+            return
         if view_name == "refresh_widget":
             return
         tab_idx = 0

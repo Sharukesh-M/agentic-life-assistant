@@ -1,5 +1,23 @@
 [
   {
+    "event_id": "1d751a75",
+    "event_type": "TASK_CREATED",
+    "task_id": "707f4974",
+    "goal_id": "8d3c24",
+    "title": "Complete a baseline check",
+    "timestamp": "2026-10-06T22:45:09.449689",
+    "extra": {}
+  },
+  {
+    "event_id": "596583c6",
+    "event_type": "TASK_CREATED",
+    "task_id": "fd8a9115",
+    "goal_id": "8d3c24",
+    "title": "Write a measurable success target",
+    "timestamp": "2026-10-06T22:45:09.361669",
+    "extra": {}
+  },
+  {
     "event_id": "5c9fa25f",
     "event_type": "TASK_CREATED",
     "task_id": "e4589420",

@@ -687,29 +687,53 @@ class JarvisLive:
             self.voice_controller.stop_speaking()
 
     def interrupt(self) -> None:
-        """Stop JARVIS mid-speech: drain queued audio and open mic immediately."""
+        """Stop JARVIS mid-speech and immediately reopen the microphone."""
+
         if getattr(self, "_in_interrupt", False):
             return
+
         self._in_interrupt = True
+
         try:
+            # Tell the receive loop to discard the old response.
             self._interrupted = True
-            q = self.audio_in_queue
-            if q:
+
+            # Drain audio that has not played yet.
+            audio_queue = self.audio_in_queue
+
+            if audio_queue is not None:
                 drained = 0
+
                 while True:
                     try:
-                        q.get_nowait()
+                        audio_queue.get_nowait()
                         drained += 1
                     except Exception:
                         break
+
                 if drained:
-                    print(f"[JARVIS] ✋ Interrupted — {drained} audio chunks discarded")
+                    print(
+                        f"[JARVIS] Interrupted — "
+                        f"{drained} audio chunks discarded"
+                    )
+
+            # Stop the VoiceController speaking state.
             self.voice_controller.interrupt()
-            if self._turn_done_event:
+
+            # Critical: release the microphone immediately.
+            with self._speaking_lock:
+                self._is_speaking = False
+
+            if self._turn_done_event is not None:
                 self._turn_done_event.clear()
+
             self.ui.write_log("SYS: Interrupted — listening...")
+
         finally:
             self._in_interrupt = False
+
+       
+               
 
     def speak(self, text: str):
         if not self._loop or not self.session:
@@ -1047,76 +1071,139 @@ class JarvisLive:
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
+            # Display PortAudio warnings without stopping the microphone.
+            if status:
+                print(f"[JARVIS] 🎤 Mic status: {status}")
+
+            # -----------------------------------------------------------
+            # Wake-word mode
+            # -----------------------------------------------------------
             if self._wake_enabled and not self._awake:
-                det = self._wake_detector
-                if det is not None:
-                    det.feed(indata)
+                detector = self._wake_detector
+
+                if detector is not None:
+                    detector.feed(indata)
+
                 return
 
+            # -----------------------------------------------------------
+            # Calculate microphone loudness
+            # -----------------------------------------------------------
             try:
-                x = np.asarray(indata, dtype=np.float32)
-                raw_rms = float(np.sqrt(np.mean(x * x))) if x.size > 0 else 0.0
+                samples = np.asarray(indata, dtype=np.float32)
+
+                raw_rms = (
+                    float(np.sqrt(np.mean(samples * samples)))
+                    if samples.size > 0
+                    else 0.0
+                )
+
             except Exception:
                 raw_rms = 0.0
 
-            # Phase 5: Real-time barge-in detection when JARVIS is speaking
-            if self.voice_controller.is_speaking():
+            # -----------------------------------------------------------
+            # Barge-in detection
+            # -----------------------------------------------------------
+            controller_was_speaking = (
+                self.voice_controller.is_speaking()
+            )
+
+            if controller_was_speaking:
                 self.voice_controller.feed_mic_level(raw_rms)
 
+            # feed_mic_level() may call interrupt(), so read the state again.
+            controller_is_speaking = (
+                self.voice_controller.is_speaking()
+            )
+
             with self._speaking_lock:
-                jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted and not self._phone_active:
+                jarvis_is_speaking = self._is_speaking
+
+            # If VoiceController detected an interruption, release the
+            # microphone immediately.
+            if controller_was_speaking and not controller_is_speaking:
+                with self._speaking_lock:
+                    self._is_speaking = False
+
+                jarvis_is_speaking = False
+
+            # -----------------------------------------------------------
+            # Send microphone audio to Gemini
+            # -----------------------------------------------------------
+            if (
+                not jarvis_is_speaking
+                and not controller_is_speaking
+                and not self.ui.muted
+                and not self._phone_active
+            ):
                 data = indata.tobytes()
+
                 loop.call_soon_threadsafe(
                     self._enqueue_out_audio,
-                    {"data": data, "mime_type": "audio/pcm"}
+                    {
+                        "data": data,
+                        "mime_type": "audio/pcm",
+                    },
                 )
+
                 try:
                     self.ui.set_audio_level(_pcm_level(indata))
                 except Exception:
                     pass
 
         try:
-            def _open_mic(dev):
+            def _open_mic(device):
                 return sd.InputStream(
                     samplerate=SEND_SAMPLE_RATE,
                     channels=CHANNELS,
                     dtype="int16",
                     blocksize=CHUNK_SIZE,
-                    device=dev,
+                    device=device,
                     callback=callback,
                 )
 
-            # Which microphone. resolve() returns None for "system default" and
-            # for a saved device that is no longer present — so a headset
-            # unplugged since the last run falls back to the built-in mic
-            # instead of raising on startup and taking the session with it.
-            _mic_name = get_input_device()
-            _mic_dev  = audio_devices.resolve(_mic_name, "input")
-            if _mic_dev is not None:
-                print(f"[JARVIS] 🎤 Input device: {_mic_name}")
-            try:
-                _mic_stream = _open_mic(_mic_dev)
-            except Exception as _e:
-                # A device the picker listed but the driver will not open right
-                # now — exclusive mode, a webcam already in use, a virtual mic
-                # whose source went away. Chosen hardware failing must never
-                # mean the assistant cannot hear at all.
-                if _mic_dev is None:
-                    raise
-                print(f"[JARVIS] ⚠️  Mic '{_mic_name}' failed: {_e} — using default")
-                self.ui.write_log(
-                    f"SYS: Microphone '{_mic_name}' unavailable — using system default."
-                )
-                _mic_stream = _open_mic(None)
+            # Load the configured microphone.
+            mic_name = get_input_device()
+            mic_device = audio_devices.resolve(mic_name, "input")
 
-            with _mic_stream:
+            if mic_device is not None:
+                print(f"[JARVIS] 🎤 Input device: {mic_name}")
+
+            try:
+                mic_stream = _open_mic(mic_device)
+
+            except Exception as error:
+                if mic_device is None:
+                    raise
+
+                print(
+                    f"[JARVIS] ⚠️ Microphone '{mic_name}' failed: "
+                    f"{error} — using system default"
+                )
+
+                self.ui.write_log(
+                    f"SYS: Microphone '{mic_name}' unavailable — "
+                    "using system default."
+                )
+
+                mic_stream = _open_mic(None)
+
+            with mic_stream:
                 print("[JARVIS] 🎤 Mic stream open")
+
                 while True:
                     await asyncio.sleep(0.1)
-        except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
+
+        except Exception as error:
+            print(f"[JARVIS] ❌ Mic: {error}")
             raise
+
+
+        
+
+        
+            
+             
 
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv started")
