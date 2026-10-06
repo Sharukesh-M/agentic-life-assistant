@@ -105,3 +105,28 @@ def test_learning_content_renderer():
     assert card.component_type == ContentType.CONCEPT_CARD
     assert card.data["definition"] == "Repeats a block of code."
     assert "for loop" in card.data["key_points"]
+
+
+def test_learning_agent_personalized_content_generation():
+    """Verify LearningAgent generates goal-aware personalized learning content adhering to output contract."""
+    agent = LearningAgent()
+    res = agent.handle("generate_content", {"tool_args": {"subject": "Placement DSA Arrays", "time_minutes": 45}})
+
+    assert res is not None
+    assert "Generated personalized learning session" in res.message
+    assert "response" in res.data
+    assert "components" in res.data
+
+    response = res.data["response"]
+    assert response.get("type") == "LEARNING_RESPONSE"
+    assert "goal" in response
+    assert "personalization" in response
+    assert "learning_objective" in response
+    assert "content" in response
+    assert "assessment" in response
+    assert "next_step" in response
+    assert len(res.data["components"]) > 0
+
+    wm = get_workspace_manager()
+    assert wm.state.active_workspace == WorkspaceName.LEARNING
+

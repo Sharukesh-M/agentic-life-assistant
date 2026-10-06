@@ -8,7 +8,7 @@
     "preferred_name": "Sharu"
   },
   "role": {
-    "type": null,
+    "type": "student",
     "details": {}
   },
   "education": {},
@@ -16,6 +16,12 @@
   "preferences": {},
   "interests": [],
   "skills": [],
-  "important_context": {},
-  "updated_at": "2026-10-05T14:41:45.574372+00:00"
+  "important_context": {
+    "free_hours_evening": "16:00-19:00, 20:00-23:00",
+    "dinner_hour": "19:00-20:00",
+    "wake_time": "6:00",
+    "college_hours": "8:00-15:30",
+    "notes": "Preparation level: beginner/from scratch for all goals"
+  },
+  "updated_at": "2026-10-06T14:29:14.394411+00:00"
 }
