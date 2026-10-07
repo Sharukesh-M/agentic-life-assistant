@@ -25,6 +25,14 @@ def debug_log(tag: str, message: str):
     logger.info(formatted)
 
 
+def pipeline_log(tag: str, **kwargs):
+    """Print uniform structured debug log for execution pipeline tracing."""
+    kvs = " ".join(f"{k}={v}" for k, v in kwargs.items() if v is not None)
+    formatted = f"[{tag.upper()}] {kvs}".strip()
+    print(formatted)
+    logger.info(formatted)
+
+
 # ── Workspace Types ──────────────────────────────────────────────────────────
 
 class WorkspaceName(str, Enum):

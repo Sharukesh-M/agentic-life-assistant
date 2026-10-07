@@ -146,33 +146,32 @@ class GoalAgent(BaseAgent):
 
         self._log_info(f"Created goal: {subject}")
 
-        # Phase 4 Enhancement: Auto-run workflow & seed tasks into TaskStore
-        goal_type = args.get("goal_type")
-        wf_res = {}
+        # Universal Goal Intelligence analysis
+        cat = args.get("category", args.get("goal_type", "custom"))
+        intel_res = {}
         try:
-            from core.goal_workflow import start_goal_workflow
-            wf_res = start_goal_workflow(subject, goal_type)
+            from services.goal_intelligence_service import get_goal_intelligence_service
+            g_service = get_goal_intelligence_service()
+            intel_res = g_service.analyze_goal(subject, category=cat)
         except Exception as exc:
-            self._log_error(f"Goal workflow error: {exc}")
+            self._log_error(f"Goal intelligence analysis error: {exc}")
 
-        # Seed tasks into TaskStore via PlanningAgent
-        tasks_msg = ""
+        msg = f"{result_text}\n\nActivated Universal Goal Intelligence Engine for '{subject}'."
+        n_tasks = len(intel_res.get("created_task_ids", []))
+        if n_tasks:
+            msg += f"\nSeeded {n_tasks} actionable tasks into schedule."
+
+        # Sync to goals.json, profile.json, and learning memory immediately
         try:
-            from agents.planning_agent import PlanningAgent
-            planning = PlanningAgent()
-            task_res = planning.handle("create_tasks", {"action": "create_tasks", "subject": subject})
-            if task_res.success:
-                tasks_msg = task_res.message
+            from memory.user_details_capturer import capture_user_goal, capture_user_profile_details
+            capture_user_goal(subject=subject, goal_type=cat)
+            capture_user_profile_details(target_exam=subject)
         except Exception as exc:
-            self._log_error(f"Task seeding error: {exc}")
-
-        msg = f"{result_text}\n\nStarted starter plan and research for '{subject}'."
-        if tasks_msg:
-            msg += f"\n{tasks_msg}"
+            self._log_error(f"User details capturer error: {exc}")
 
         return AgentResult(
             message=msg,
-            data={"created": True, "subject": subject, "workflow": wf_res, "tasks_seeded": bool(tasks_msg)},
+            data={"created": True, "subject": subject, "intelligence": intel_res},
             next_agent="planning_agent",
         )
 

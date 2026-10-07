@@ -17,9 +17,11 @@ import os
 import re
 import time
 from typing import Any, Dict, List, Optional
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 class GeminiLearningClient:
@@ -30,10 +32,35 @@ class GeminiLearningClient:
     """
 
     def __init__(self):
+        self.api_key = ""
+        self.model_name = "gemini-2.5-flash"
+        self._client = None
+        self.reload_key()
+
+    def reload_key(self):
+        learning_key_from_cfg = ""
+        primary_key_from_cfg = ""
+        try:
+            cfg_path = Path(__file__).resolve().parent.parent.parent / "config" / "api_keys.json"
+            if cfg_path.exists():
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+                learning_key_from_cfg = (
+                    cfg.get("learning_gemini_api_key")
+                    or cfg.get("GEMINI_LEARNING_API_KEY")
+                    or cfg.get("learning_api_key")
+                    or ""
+                )
+                primary_key_from_cfg = cfg.get("gemini_api_key") or cfg.get("GEMINI_API_KEY") or ""
+        except Exception as exc:
+            print(f"[GeminiLearningClient] Error reading config: {exc}")
+
+        # Strictly prioritize the dedicated Learning Gemini API Key
         self.api_key = (
             os.getenv("GEMINI_LEARNING_API_KEY")
+            or os.getenv("learning_gemini_api_key")
+            or learning_key_from_cfg
             or os.getenv("GEMINI_API_KEY")
-            or os.getenv("gemini_api_key")
+            or primary_key_from_cfg
             or ""
         ).strip()
 
@@ -43,7 +70,6 @@ class GeminiLearningClient:
             or "gemini-2.5-flash"
         ).strip()
 
-        self._client = None
         self._init_client()
 
     def _init_client(self):
@@ -51,9 +77,12 @@ class GeminiLearningClient:
             try:
                 from google import genai
                 self._client = genai.Client(api_key=self.api_key)
+                print(f"[GeminiLearningClient] Initialized with dedicated learning key (prefix: {self.api_key[:6]}...)")
             except Exception as exc:
                 print(f"[GeminiLearningClient] Init warning: {exc}")
                 self._client = None
+        else:
+            self._client = None
 
     def is_available(self) -> bool:
         return self._client is not None and bool(self.api_key)

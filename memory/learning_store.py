@@ -171,6 +171,44 @@ class LearningStore:
         self._write_json(self.progress_path, progress_data)
         return progress_data
 
+    # --- Learning Sessions ---
+    def load_sessions(self) -> List[Dict[str, Any]]:
+        sessions_path = self.dir / "learning_sessions.json"
+        return self._read_json(sessions_path, [])
+
+    def save_session(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
+        sessions_path = self.dir / "learning_sessions.json"
+        sessions = self.load_sessions()
+        sid = session_data.get("session_id") or session_data.get("id") or f"sess-{int(datetime.now().timestamp())}"
+        session_data["session_id"] = sid
+        session_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        updated = False
+        for idx, item in enumerate(sessions):
+            if item.get("session_id") == sid or (
+                item.get("module_id") and item.get("module_id") == session_data.get("module_id")
+            ):
+                sessions[idx] = session_data
+                updated = True
+                break
+        if not updated:
+            sessions.append(session_data)
+
+        self._write_json(sessions_path, sessions)
+        return session_data
+
+    def get_session_by_module(self, module_id: str) -> Optional[Dict[str, Any]]:
+        for item in self.load_sessions():
+            if item.get("module_id") == module_id or item.get("session", {}).get("module_id") == module_id:
+                return item
+        return None
+
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        for item in self.load_sessions():
+            if item.get("session_id") == session_id:
+                return item
+        return None
+
 
 _store_instance: Optional[LearningStore] = None
 
@@ -180,3 +218,4 @@ def get_learning_store() -> LearningStore:
     if _store_instance is None:
         _store_instance = LearningStore()
     return _store_instance
+

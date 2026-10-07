@@ -1,110 +1,506 @@
 [
   {
-    "event_id": "1d751a75",
+    "event_id": "236af59a",
     "event_type": "TASK_CREATED",
-    "task_id": "707f4974",
-    "goal_id": "8d3c24",
-    "title": "Complete a baseline check",
-    "timestamp": "2026-10-06T22:45:09.449689",
-    "extra": {}
-  },
-  {
-    "event_id": "596583c6",
-    "event_type": "TASK_CREATED",
-    "task_id": "fd8a9115",
-    "goal_id": "8d3c24",
-    "title": "Write a measurable success target",
-    "timestamp": "2026-10-06T22:45:09.361669",
-    "extra": {}
-  },
-  {
-    "event_id": "5c9fa25f",
-    "event_type": "TASK_CREATED",
-    "task_id": "e4589420",
-    "goal_id": "69f279",
-    "title": "Collect the official syllabus",
-    "timestamp": "2026-10-06T20:02:52.815553",
-    "extra": {}
-  },
-  {
-    "event_id": "9c84cb72",
-    "event_type": "TASK_CREATED",
-    "task_id": "463445e3",
-    "goal_id": "3accf4",
-    "title": "Write a measurable success target",
-    "timestamp": "2026-10-06T20:02:52.814439",
-    "extra": {}
-  },
-  {
-    "event_id": "85451186",
-    "event_type": "TASK_CREATED",
-    "task_id": "fe906d6f",
-    "goal_id": "69f279",
-    "title": "Record weak and strong topics",
-    "timestamp": "2026-10-06T20:01:06.327514",
-    "extra": {}
-  },
-  {
-    "event_id": "015d2b1e",
-    "event_type": "TASK_CREATED",
-    "task_id": "d7a95be9",
-    "goal_id": "69f279",
-    "title": "Take a diagnostic or previous-year paper",
-    "timestamp": "2026-10-06T20:01:06.326378",
-    "extra": {}
-  },
-  {
-    "event_id": "e76c2aba",
-    "event_type": "TASK_CREATED",
-    "task_id": "3e70967a",
-    "goal_id": "69f279",
-    "title": "List subjects and their weightage",
-    "timestamp": "2026-10-06T20:01:06.325603",
-    "extra": {}
-  },
-  {
-    "event_id": "ad0e62d5",
-    "event_type": "TASK_CREATED",
-    "task_id": "dd5ccc22",
-    "goal_id": "69f279",
-    "title": "Collect the official syllabus",
-    "timestamp": "2026-10-06T20:01:06.324596",
-    "extra": {}
-  },
-  {
-    "event_id": "d8460e33",
-    "event_type": "TASK_CREATED",
-    "task_id": "1fadf473",
-    "goal_id": "3accf4",
-    "title": "Complete a baseline check",
-    "timestamp": "2026-10-06T20:01:04.935384",
-    "extra": {}
-  },
-  {
-    "event_id": "bcb4c4f7",
-    "event_type": "TASK_CREATED",
-    "task_id": "4b81bdd3",
-    "goal_id": "3accf4",
-    "title": "Write a measurable success target",
-    "timestamp": "2026-10-06T20:01:04.932136",
-    "extra": {}
-  },
-  {
-    "event_id": "d707b395",
-    "event_type": "TASK_CREATED",
-    "task_id": "07531ad2",
+    "task_id": "66f7737f",
     "goal_id": "",
-    "title": "Find GATE 2027 Syllabus",
-    "timestamp": "2026-10-06T20:00:45.207505",
+    "title": "Update Target Task",
+    "timestamp": "2026-10-07T19:42:46.826846",
     "extra": {}
   },
   {
-    "event_id": "32233a8d",
+    "event_id": "1fd74ffa",
     "event_type": "TASK_CREATED",
-    "task_id": "fb6bfd7c",
+    "task_id": "540ec612",
     "goal_id": "",
-    "title": "Research AI Engineering Syllabus",
-    "timestamp": "2026-10-06T20:00:45.105655",
+    "title": "UI Refresh Test Task",
+    "timestamp": "2026-10-07T19:42:46.825545",
+    "extra": {}
+  },
+  {
+    "event_id": "f69c2d32",
+    "event_type": "TASK_CREATED",
+    "task_id": "d53a6d30",
+    "goal_id": "",
+    "title": "User B Task",
+    "timestamp": "2026-10-07T19:42:46.824046",
+    "extra": {}
+  },
+  {
+    "event_id": "4301070d",
+    "event_type": "TASK_CREATED",
+    "task_id": "a1a44be1",
+    "goal_id": "",
+    "title": "User A Task",
+    "timestamp": "2026-10-07T19:42:46.823028",
+    "extra": {}
+  },
+  {
+    "event_id": "23ed001d",
+    "event_type": "TASK_CREATED",
+    "task_id": "5a4d4299",
+    "goal_id": "",
+    "title": "End to End Pipeline Task",
+    "timestamp": "2026-10-07T19:42:46.820535",
+    "extra": {}
+  },
+  {
+    "event_id": "1d806d33",
+    "event_type": "TASK_COMPLETED",
+    "task_id": "9b3bfb99",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:46.819116",
+    "extra": {}
+  },
+  {
+    "event_id": "f58a2458",
+    "event_type": "TASK_CREATED",
+    "task_id": "9b3bfb99",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:46.818293",
+    "extra": {}
+  },
+  {
+    "event_id": "b9853561",
+    "event_type": "TASK_DELETED",
+    "task_id": "3032a66d",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:46.817054",
+    "extra": {}
+  },
+  {
+    "event_id": "454e0e38",
+    "event_type": "TASK_CREATED",
+    "task_id": "3032a66d",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:46.816320",
+    "extra": {}
+  },
+  {
+    "event_id": "c0fd0e53",
+    "event_type": "TASK_CREATED",
+    "task_id": "0f8be6cd",
+    "goal_id": "",
+    "title": "Unique Daily Task",
+    "timestamp": "2026-10-07T19:42:46.815045",
+    "extra": {}
+  },
+  {
+    "event_id": "89b32fa4",
+    "event_type": "TASK_CREATED",
+    "task_id": "d9eb90f4",
+    "goal_id": "",
+    "title": "Today Task 2",
+    "timestamp": "2026-10-07T19:42:46.812758",
+    "extra": {}
+  },
+  {
+    "event_id": "be0873f6",
+    "event_type": "TASK_CREATED",
+    "task_id": "a556bb3c",
+    "goal_id": "",
+    "title": "Today Task 1",
+    "timestamp": "2026-10-07T19:42:46.811891",
+    "extra": {}
+  },
+  {
+    "event_id": "d12af62b",
+    "event_type": "TASK_CREATED",
+    "task_id": "f2a39dbf",
+    "goal_id": "",
+    "title": "Event Trigger Test",
+    "timestamp": "2026-10-07T19:42:46.809398",
+    "extra": {}
+  },
+  {
+    "event_id": "05144a48",
+    "event_type": "TASK_CREATED",
+    "task_id": "9af728fc",
+    "goal_id": "",
+    "title": "Test Task Persistence",
+    "timestamp": "2026-10-07T19:42:46.807631",
+    "extra": {}
+  },
+  {
+    "event_id": "9bc0dfa8",
+    "event_type": "TASK_CREATED",
+    "task_id": "51119ccd",
+    "goal_id": "",
+    "title": "Update Target Task",
+    "timestamp": "2026-10-07T19:42:28.163916",
+    "extra": {}
+  },
+  {
+    "event_id": "9ca84e5d",
+    "event_type": "TASK_CREATED",
+    "task_id": "e32816d9",
+    "goal_id": "",
+    "title": "UI Refresh Test Task",
+    "timestamp": "2026-10-07T19:42:28.162090",
+    "extra": {}
+  },
+  {
+    "event_id": "e0fb7000",
+    "event_type": "TASK_CREATED",
+    "task_id": "9dc61793",
+    "goal_id": "",
+    "title": "User B Task",
+    "timestamp": "2026-10-07T19:42:28.159971",
+    "extra": {}
+  },
+  {
+    "event_id": "4ff80aa1",
+    "event_type": "TASK_CREATED",
+    "task_id": "65fe9745",
+    "goal_id": "",
+    "title": "User A Task",
+    "timestamp": "2026-10-07T19:42:28.158180",
+    "extra": {}
+  },
+  {
+    "event_id": "6ceaf6d1",
+    "event_type": "TASK_CREATED",
+    "task_id": "9f538005",
+    "goal_id": "",
+    "title": "End to End Pipeline Task",
+    "timestamp": "2026-10-07T19:42:28.155401",
+    "extra": {}
+  },
+  {
+    "event_id": "a8c701a8",
+    "event_type": "TASK_COMPLETED",
+    "task_id": "37fecac2",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:28.153261",
+    "extra": {}
+  },
+  {
+    "event_id": "7bb27292",
+    "event_type": "TASK_CREATED",
+    "task_id": "37fecac2",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:28.151779",
+    "extra": {}
+  },
+  {
+    "event_id": "9d0d9b41",
+    "event_type": "TASK_DELETED",
+    "task_id": "9b48521c",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:28.149908",
+    "extra": {}
+  },
+  {
+    "event_id": "a1d2cb52",
+    "event_type": "TASK_CREATED",
+    "task_id": "9b48521c",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:28.148850",
+    "extra": {}
+  },
+  {
+    "event_id": "dd332fba",
+    "event_type": "TASK_CREATED",
+    "task_id": "de377b9e",
+    "goal_id": "",
+    "title": "Unique Daily Task",
+    "timestamp": "2026-10-07T19:42:28.146829",
+    "extra": {}
+  },
+  {
+    "event_id": "cc876053",
+    "event_type": "TASK_CREATED",
+    "task_id": "c63097bc",
+    "goal_id": "",
+    "title": "Today Task 2",
+    "timestamp": "2026-10-07T19:42:28.143575",
+    "extra": {}
+  },
+  {
+    "event_id": "77e2b072",
+    "event_type": "TASK_CREATED",
+    "task_id": "e46ab57f",
+    "goal_id": "",
+    "title": "Today Task 1",
+    "timestamp": "2026-10-07T19:42:28.142239",
+    "extra": {}
+  },
+  {
+    "event_id": "7b8088b3",
+    "event_type": "TASK_CREATED",
+    "task_id": "e0eecef1",
+    "goal_id": "",
+    "title": "Event Trigger Test",
+    "timestamp": "2026-10-07T19:42:28.139447",
+    "extra": {}
+  },
+  {
+    "event_id": "c645baf3",
+    "event_type": "TASK_CREATED",
+    "task_id": "e21f6acf",
+    "goal_id": "",
+    "title": "Test Task Persistence",
+    "timestamp": "2026-10-07T19:42:28.137540",
+    "extra": {}
+  },
+  {
+    "event_id": "17bc9156",
+    "event_type": "TASK_CREATED",
+    "task_id": "16d1fea9",
+    "goal_id": "",
+    "title": "Update Target Task",
+    "timestamp": "2026-10-07T19:42:13.990757",
+    "extra": {}
+  },
+  {
+    "event_id": "349ed617",
+    "event_type": "TASK_CREATED",
+    "task_id": "40ac7e85",
+    "goal_id": "",
+    "title": "UI Refresh Test Task",
+    "timestamp": "2026-10-07T19:42:13.989466",
+    "extra": {}
+  },
+  {
+    "event_id": "602e91ce",
+    "event_type": "TASK_CREATED",
+    "task_id": "cc8c29ad",
+    "goal_id": "",
+    "title": "User B Task",
+    "timestamp": "2026-10-07T19:42:13.987850",
+    "extra": {}
+  },
+  {
+    "event_id": "807d0cd7",
+    "event_type": "TASK_CREATED",
+    "task_id": "be0648c9",
+    "goal_id": "",
+    "title": "User A Task",
+    "timestamp": "2026-10-07T19:42:13.987010",
+    "extra": {}
+  },
+  {
+    "event_id": "df6908ec",
+    "event_type": "TASK_CREATED",
+    "task_id": "b0fc255c",
+    "goal_id": "",
+    "title": "End to End Pipeline Task",
+    "timestamp": "2026-10-07T19:42:13.984967",
+    "extra": {}
+  },
+  {
+    "event_id": "1ecf0b51",
+    "event_type": "TASK_COMPLETED",
+    "task_id": "d7c7abfe",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:13.983226",
+    "extra": {}
+  },
+  {
+    "event_id": "3448519b",
+    "event_type": "TASK_CREATED",
+    "task_id": "d7c7abfe",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:42:13.982378",
+    "extra": {}
+  },
+  {
+    "event_id": "634e378f",
+    "event_type": "TASK_DELETED",
+    "task_id": "6d01e3b6",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:13.981224",
+    "extra": {}
+  },
+  {
+    "event_id": "914daa10",
+    "event_type": "TASK_CREATED",
+    "task_id": "6d01e3b6",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:42:13.980537",
+    "extra": {}
+  },
+  {
+    "event_id": "10a80419",
+    "event_type": "TASK_CREATED",
+    "task_id": "e468a914",
+    "goal_id": "",
+    "title": "Unique Daily Task",
+    "timestamp": "2026-10-07T19:42:13.979244",
+    "extra": {}
+  },
+  {
+    "event_id": "a59f5fbe",
+    "event_type": "TASK_CREATED",
+    "task_id": "b1d901ed",
+    "goal_id": "",
+    "title": "Today Task 2",
+    "timestamp": "2026-10-07T19:42:13.976662",
+    "extra": {}
+  },
+  {
+    "event_id": "b0a49004",
+    "event_type": "TASK_CREATED",
+    "task_id": "30b8d1ea",
+    "goal_id": "",
+    "title": "Today Task 1",
+    "timestamp": "2026-10-07T19:42:13.975889",
+    "extra": {}
+  },
+  {
+    "event_id": "4fdcf44c",
+    "event_type": "TASK_CREATED",
+    "task_id": "99c65a47",
+    "goal_id": "",
+    "title": "Event Trigger Test",
+    "timestamp": "2026-10-07T19:42:13.973970",
+    "extra": {}
+  },
+  {
+    "event_id": "0fc69f95",
+    "event_type": "TASK_CREATED",
+    "task_id": "b2a91772",
+    "goal_id": "",
+    "title": "Test Task Persistence",
+    "timestamp": "2026-10-07T19:42:13.972596",
+    "extra": {}
+  },
+  {
+    "event_id": "28c16498",
+    "event_type": "TASK_CREATED",
+    "task_id": "35cea0cc",
+    "goal_id": "",
+    "title": "Update Target Task",
+    "timestamp": "2026-10-07T19:41:56.663873",
+    "extra": {}
+  },
+  {
+    "event_id": "94483397",
+    "event_type": "TASK_CREATED",
+    "task_id": "c39272bb",
+    "goal_id": "",
+    "title": "UI Refresh Test Task",
+    "timestamp": "2026-10-07T19:41:56.662695",
+    "extra": {}
+  },
+  {
+    "event_id": "b5060188",
+    "event_type": "TASK_CREATED",
+    "task_id": "0d8d06fe",
+    "goal_id": "",
+    "title": "User B Task",
+    "timestamp": "2026-10-07T19:41:56.661350",
+    "extra": {}
+  },
+  {
+    "event_id": "3eb1cf2e",
+    "event_type": "TASK_CREATED",
+    "task_id": "e9dd4aa8",
+    "goal_id": "",
+    "title": "User A Task",
+    "timestamp": "2026-10-07T19:41:56.660642",
+    "extra": {}
+  },
+  {
+    "event_id": "8a5dbc8e",
+    "event_type": "TASK_CREATED",
+    "task_id": "554fa045",
+    "goal_id": "",
+    "title": "End to End Pipeline Task",
+    "timestamp": "2026-10-07T19:41:56.658567",
+    "extra": {}
+  },
+  {
+    "event_id": "22e7f384",
+    "event_type": "TASK_COMPLETED",
+    "task_id": "8d4dd179",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:41:56.656907",
+    "extra": {}
+  },
+  {
+    "event_id": "e79879b2",
+    "event_type": "TASK_CREATED",
+    "task_id": "8d4dd179",
+    "goal_id": "",
+    "title": "Complete Me",
+    "timestamp": "2026-10-07T19:41:56.656217",
+    "extra": {}
+  },
+  {
+    "event_id": "031bad15",
+    "event_type": "TASK_DELETED",
+    "task_id": "c3320478",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:41:56.655233",
+    "extra": {}
+  },
+  {
+    "event_id": "6fd82969",
+    "event_type": "TASK_CREATED",
+    "task_id": "c3320478",
+    "goal_id": "",
+    "title": "Cache Invalidation Test",
+    "timestamp": "2026-10-07T19:41:56.654733",
+    "extra": {}
+  },
+  {
+    "event_id": "438d405d",
+    "event_type": "TASK_CREATED",
+    "task_id": "a29b81a0",
+    "goal_id": "",
+    "title": "Unique Daily Task",
+    "timestamp": "2026-10-07T19:41:56.653678",
+    "extra": {}
+  },
+  {
+    "event_id": "16952a4b",
+    "event_type": "TASK_CREATED",
+    "task_id": "7d31bcc8",
+    "goal_id": "",
+    "title": "Today Task 2",
+    "timestamp": "2026-10-07T19:41:56.651672",
+    "extra": {}
+  },
+  {
+    "event_id": "038764aa",
+    "event_type": "TASK_CREATED",
+    "task_id": "14bd6306",
+    "goal_id": "",
+    "title": "Today Task 1",
+    "timestamp": "2026-10-07T19:41:56.651109",
+    "extra": {}
+  },
+  {
+    "event_id": "c442b169",
+    "event_type": "TASK_CREATED",
+    "task_id": "a05129a1",
+    "goal_id": "",
+    "title": "Event Trigger Test",
+    "timestamp": "2026-10-07T19:41:56.649576",
+    "extra": {}
+  },
+  {
+    "event_id": "74c8c947",
+    "event_type": "TASK_CREATED",
+    "task_id": "c7cae8b6",
+    "goal_id": "",
+    "title": "Test Task Persistence",
+    "timestamp": "2026-10-07T19:41:56.648336",
     "extra": {}
   }
 ]

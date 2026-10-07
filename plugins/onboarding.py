@@ -46,6 +46,41 @@ def _status_text() -> str:
     return "This is a first-time profile setup. Introduce yourself and ask what Jarvis should call the user."
 
 
+def _auto_generate_goals_from_profile(profile: dict) -> None:
+    """Dynamically analyzes and generates goals, roadmaps, and tasks in goals.json & tasks.json when goals are captured in profile."""
+    try:
+        from services.goal_intelligence_service import get_goal_intelligence_service
+        g_service = get_goal_intelligence_service()
+        
+        ctx = profile.get("important_context", {})
+        details = profile.get("education", {})
+        details.update(profile.get("profession", {}))
+        
+        extracted_goals = []
+        for key in ["primary_goal", "secondary_goal", "tertiary_goal", "goals", "target_goal", "career_goal", "exam_goal"]:
+            val = ctx.get(key) or details.get(key)
+            if val and isinstance(val, str) and val.strip():
+                extracted_goals.append(val.strip())
+            elif isinstance(val, list):
+                for v in val:
+                    if v and isinstance(v, str) and v.strip():
+                        extracted_goals.append(v.strip())
+
+        for item in profile.get("interests", []):
+            if isinstance(item, str) and item.strip() and item.strip() not in extracted_goals:
+                extracted_goals.append(item.strip())
+
+        existing_goals = g_service.load_goals()
+        existing_titles = [g.get("subject", "").lower() for g in existing_goals]
+
+        for goal_str in extracted_goals:
+            if goal_str.lower() not in existing_titles:
+                print(f"[ONBOARDING] Auto-generating dynamic intelligence for goal: '{goal_str}'")
+                g_service.analyze_goal(goal_str)
+    except Exception as exc:
+        print(f"[ONBOARDING] Auto goal generation error: {exc}")
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     action = (parameters.get("action") or "status").strip().lower()
     try:
@@ -64,10 +99,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 section = "education" if any(k in details for k in ("school", "college", "university", "degree", "branch", "year", "semester", "subjects")) else "profession" if any(k in details for k in ("job", "industry", "company", "experience", "profession")) else "important_context"
                 updates.setdefault(section, {}).update({str(k): v for k, v in details.items() if v not in (None, "", [])})
             if updates:
-                update_profile(updates)
+                updated_prof = update_profile(updates)
+                _auto_generate_goals_from_profile(updated_prof)
             next_question = (parameters.get("next_question") or "").strip()
             if action == "complete":
                 set_onboarding("completed")
+                _auto_generate_goals_from_profile(load_profile())
                 result = "Your profile is ready. I will use it to personalize future assistance."
             else:
                 set_onboarding("in_progress", next_question or None)

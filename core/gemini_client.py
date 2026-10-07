@@ -1,8 +1,10 @@
 import os
 from google import genai
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 client = genai.Client(
     api_key=os.getenv("gemini_api_key")

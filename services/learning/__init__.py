@@ -20,6 +20,10 @@ from typing import Any, Dict, Optional
 from services.learning.assessment_service import AssessmentService
 from services.learning.coding_service import CodingService
 from services.learning.gemini_learning_client import GeminiLearningClient, get_gemini_learning_client
+from services.learning.interactive_session_service import (
+    InteractiveLearningSessionService,
+    get_interactive_session_service,
+)
 from services.learning.lesson_service import LessonService
 from services.learning.progress_service import LearningProgressService
 from services.learning.quiz_service import QuizService
@@ -41,14 +45,21 @@ class LearningIntelligenceService:
         self.assessment_service = AssessmentService()
         self.progress_service = LearningProgressService()
         self.recommendation_service = LearningRecommendationService()
+        self.session_service = get_interactive_session_service()
 
     def process_learning_request(self, request_type: str, user_context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Routes learning requests to appropriate intelligence service."""
         request_type = request_type.lower().strip()
 
-        if request_type in ("roadmap", "generate_roadmap"):
+        if request_type in ("module_click", "interactive_session", "session"):
+            module_id = kwargs.get("module_id", kwargs.get("subject", "Python Lists"))
+            force = kwargs.get("force_refresh", False)
+            return self.session_service.handle_module_click(module_id, force_refresh=force)
+
+        elif request_type in ("roadmap", "generate_roadmap"):
             goal_title = kwargs.get("goal_title", kwargs.get("subject", "Software Developer"))
             return self.roadmap_service.generate_roadmap(user_context, goal_title)
+
 
         elif request_type in ("lesson", "generate_lesson", "content"):
             topic_title = kwargs.get("topic_title", kwargs.get("subject", "Core Principles"))

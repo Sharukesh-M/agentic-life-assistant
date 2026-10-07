@@ -417,12 +417,59 @@ def forget(key: str, category: str = "notes") -> str:
         memory[category] = cat
         save_memory(memory)
         return f"Forgotten: {category}/{key}"
-def clear_memory() -> dict:
-    empty = _empty_memory()
-    empty["sessions"] = []
-    save_memory(empty)
-    print("[Memory] 🧹 Long-term memory cleared.")
-    return empty
+def factory_reset() -> dict:
+    base = Path(__file__).resolve().parent
+
+    empty_lt = _empty_memory()
+    empty_lt["sessions"] = []
+    save_memory(empty_lt)
+    
+    for fname in ["goals.json", "tasks.json", "task_events.json", "learning_sessions.json", "concepts.json", "todos.json", "comm_data.json"]:
+        p = base / fname
+        try:
+            p.write_text("[]", encoding="utf-8")
+        except Exception:
+            pass
+
+    p_prog = base / "learning_progress.json"
+    try:
+        p_prog.write_text(json.dumps({
+            "total_learning_minutes": 0,
+            "completed_topics": [],
+            "skipped_topics": [],
+            "weak_topics": [],
+            "strong_topics": [],
+            "quiz_accuracy": {},
+            "coding_accuracy": {},
+            "streak_days": 0,
+            "last_active_date": None
+        }, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    prof_path = base / "profile.json"
+    try:
+        prof_path.write_text(json.dumps({
+            "version": 1,
+            "onboarding": {"status": "not_started", "last_question": None},
+            "identity": {"preferred_name": None},
+            "role": {"type": None, "details": {}},
+            "education": {},
+            "profession": {},
+            "preferences": {},
+            "interests": [],
+            "skills": [],
+            "important_context": {},
+            "updated_at": None
+        }, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    print("[Memory] 🧹 FACTORY RESET COMPLETE: All profile, goals, tasks, learning sessions & memory cleared.")
+    return empty_lt
+
+
+clear_memory = factory_reset
 
 
 forget_memory = forget

@@ -107,19 +107,33 @@ TOOL = {
 }
 
 
-def handle_workspace_action(parameters: dict, **kwargs) -> str:
+def handle_workspace_action(parameters: dict, **kwargs) -> Any:
     action = parameters.get("action", "").lower().strip()
-    store = get_task_store()
+    from memory.task_store import get_task_service
+    from core.workspace_manager import get_workspace_manager, pipeline_log
+    
+    svc = get_task_service()
+    ws_mgr = get_workspace_manager()
     goal_agent = GoalAgent()
     planning_agent = PlanningAgent()
     learning_agent = LearningAgent()
     progress_agent = ProgressAgent()
 
+    user_id = parameters.get("user_id", "default_user")
+
     # 1. CREATE TASK
-    if action == "create_task":
+    if action in ("create_task", "create_tasks"):
         title = parameters.get("title", "").strip()
+        tasks_list = parameters.get("tasks", [])
+        
+        if tasks_list and isinstance(tasks_list, list):
+            res = svc.create_tasks(tasks_list, user_id=user_id)
+            ws_mgr.set_active_workspace("TASKS")
+            _notify_ui("refresh_widget")
+            return res
+            
         if not title:
-            return "Task creation failed: title is required."
+            return {"success": False, "operation": "create_task", "message": "Task creation failed: title is required."}
         
         desc = parameters.get("description", "")
         g_id = parameters.get("goal_id", "")
@@ -130,9 +144,10 @@ def handle_workspace_action(parameters: dict, **kwargs) -> str:
         dur = int(parameters.get("duration", parameters.get("duration_minutes", 30)))
         pri = int(parameters.get("priority", 0))
 
-        res = store.create_task(
+        res = svc.create_task(
             title=title,
             description=desc,
+            user_id=user_id,
             goal_id=g_id,
             milestone_id=m_id,
             objective=obj,
@@ -142,21 +157,15 @@ def handle_workspace_action(parameters: dict, **kwargs) -> str:
             priority=pri,
         )
         if res.get("success"):
-            try:
-                from core.workspace_manager import emit_event, EventType
-                emit_event(EventType.TASK_CREATED, {"task": res["task"]})
-            except Exception:
-                pass
             _notify_ui("refresh_widget")
-            task_obj = res["task"]
-            return f"Created task: '{task_obj['title']}' (ID: {task_obj['id']}) for {task_obj['scheduled_date']}. Saved to task store and widget refreshed."
-        return f"Could not create task: {res.get('error', 'Database write error')}"
+        return res
 
     # 2. GET TODAY'S TASKS
     elif action in ("get_today_tasks", "open_today_tasks"):
-        today_tasks = store.today()
+        ws_mgr.open_task_workspace()
+        today_tasks = svc.get_today_tasks(user_id=user_id)
         
-        # If no tasks exist for today, generate daily plan from goals & persist them
+        # Idempotent Daily Plan Generation if no tasks exist today
         if not today_tasks:
             goals = goal_agent._load_goals()
             active_goals = [g for g in goals if g.get("status", "active") == "active"]
@@ -169,8 +178,9 @@ def handle_workspace_action(parameters: dict, **kwargs) -> str:
                         m_tasks = ms.get("tasks", []) if isinstance(ms, dict) else []
                         for t_spec in m_tasks[:1]:
                             t_title = t_spec.get("title", f"Work on {g['subject']}") if isinstance(t_spec, dict) else str(t_spec)
-                            t_res = store.create_task(
+                            t_res = svc.create_task(
                                 title=t_title,
+                                user_id=user_id,
                                 goal_id=g.get("id", ""),
                                 goal_subject=g.get("subject", ""),
                                 scheduled_date=date.today().isoformat(),
@@ -178,56 +188,44 @@ def handle_workspace_action(parameters: dict, **kwargs) -> str:
                             )
                             if t_res.get("success"):
                                 created_new.append(t_res["task"])
-                today_tasks = store.today()
+                today_tasks = svc.get_today_tasks(user_id=user_id)
 
         _notify_ui("task_workspace", {"action": "open"})
+        tasks_data = [t.to_dict() for t in today_tasks]
 
-        if not today_tasks:
-            return "No tasks scheduled for today and no active goals found to generate a plan."
+        return {
+            "success": True,
+            "operation": "get_today_tasks",
+            "count": len(tasks_data),
+            "tasks": tasks_data,
+            "message": f"Retrieved {len(tasks_data)} task(s) for today."
+        }
 
-        total_mins = sum(t.duration_minutes for t in today_tasks)
-        hours = round(total_mins / 60, 1)
-
-        lines = ["Here's your plan for today:"]
-        for idx, t in enumerate(today_tasks, 1):
-            st = "✓ DONE" if t.status == TaskStatus.COMPLETED else ("▶ IN PROGRESS" if t.status == TaskStatus.IN_PROGRESS else f"{t.duration_minutes} min")
-            lines.append(f"{idx}. {t.title} — {st}")
-
-        lines.append(f"\nYou have {hours} hours of planned work today.")
-        return "\n".join(lines)
-
-    # 3. GET TASK / SEARCH TASK
+    # 3. GET TASK
     elif action == "get_task":
         task_id = parameters.get("task_id", "").strip()
-        task = store.get(task_id)
-        if not task:
-            all_t = store.all()
-            matches = [t for t in all_t if task_id.lower() in t.title.lower()]
-            if matches:
-                task = matches[0]
+        task = svc.get_task(task_id)
         if task:
-            return f"Task [{task.id}]: {task.title} | Goal: {task.goal_subject} | Status: {task.status} | Scheduled: {task.scheduled_date}"
-        return f"Task '{task_id}' not found."
+            return {"success": True, "operation": "get_task", "task": task.to_dict()}
+        return {"success": False, "operation": "get_task", "message": f"Task '{task_id}' not found."}
 
     # 4. UPDATE TASK
     elif action == "update_task":
         task_id = parameters.get("task_id", "").strip()
         kw = {k: v for k, v in parameters.items() if k in ("title", "description", "duration_minutes", "priority", "status", "scheduled_date") and v is not None}
-        updated = store.update(task_id, **kw)
-        if updated:
+        res = svc.update_task(task_id, **kw)
+        if res.get("success"):
             _notify_ui("refresh_widget")
-            return f"Updated task [{updated.id}] '{updated.title}'."
-        return f"Task '{task_id}' not found to update."
+        return res
 
     # 5. COMPLETE TASK
     elif action == "complete_task":
         task_id = parameters.get("task_id", "").strip()
-        res = store.complete_task(task_id)
+        res = svc.complete_task(task_id)
         if res.get("success"):
             _notify_ui("task_completed", {"task": res["task"]})
             _notify_ui("refresh_widget")
-            return f"Great job! Marked task '{res['task']['title']}' (ID: {res['task_id']}) as completed."
-        return f"Could not complete task: {res.get('error', 'Task not found')}"
+        return res
 
     # 6. POSTPONE / RESCHEDULE TASK
     elif action in ("postpone_task", "reschedule_task"):
@@ -235,81 +233,72 @@ def handle_workspace_action(parameters: dict, **kwargs) -> str:
         new_date = parameters.get("new_date", (date.today() + timedelta(days=1)).isoformat())
         reason = parameters.get("reason", "Rescheduled by user request")
         if not task_id:
-            pending = store.pending()
+            pending = svc.get_pending_tasks(user_id=user_id)
             if pending:
                 task_id = pending[0].id
         if not task_id:
-            return "No task specified or found to reschedule."
+            return {"success": False, "operation": "reschedule_task", "message": "No task specified or found to reschedule."}
 
-        res = store.reschedule(task_id, new_date, reason)
-        if res:
-            _notify_ui("task_rescheduled", {"task": res.to_dict()})
+        res = svc.reschedule_task(task_id, new_date, reason)
+        if res.get("success"):
+            _notify_ui("task_rescheduled", {"task": res["task"]})
             _notify_ui("refresh_widget")
-            return f"Rescheduled task '{res.title}' to {new_date}."
-        return f"Could not find task '{task_id}' to reschedule."
+        return res
 
     # 7. DELETE TASK
     elif action == "delete_task":
         task_id = parameters.get("task_id", "").strip()
-        ok = store.delete(task_id)
-        if ok:
+        res = svc.delete_task(task_id)
+        if res.get("success"):
             _notify_ui("refresh_widget")
-            return f"Deleted task [{task_id}] from database."
-        return f"Task '{task_id}' not found to delete."
+        return res
 
     # 8. OPEN TASK SPECIFICALLY
     elif action == "open_task":
         task_id = parameters.get("task_id", "").strip()
-        task = store.get(task_id)
-        if not task:
-            matches = [t for t in store.all() if task_id.lower() in t.title.lower()]
-            if matches:
-                task = matches[0]
+        task = svc.get_task(task_id)
         if task:
+            ws_mgr.open_task_workspace()
             _notify_ui("open_task", {"task": task.to_dict()})
-            return f"Opening task [{task.id}] '{task.title}' in the Task Workspace."
-        return f"Could not find task '{task_id}' to open."
+            return {"success": True, "operation": "open_task", "task": task.to_dict()}
+        return {"success": False, "operation": "open_task", "message": f"Could not find task '{task_id}'."}
 
     # 9. OPEN TASK WORKSPACE
-    elif action in ("open_task_workspace", "open_today_tasks"):
-        try:
-            from core.workspace_manager import get_workspace_manager
-            get_workspace_manager().open_task_workspace()
-        except Exception:
-            pass
+    elif action == "open_task_workspace":
+        res_ws = ws_mgr.open_task_workspace()
         _notify_ui("task_workspace", {"action": "open"})
-        today_tasks = store.today()
-        return f"Opened Task Workspace. Displaying {len(today_tasks)} task(s) for today."
+        today_tasks = [t.to_dict() for t in svc.get_today_tasks(user_id=user_id)]
+        return {
+            "success": True,
+            "operation": "open_task_workspace",
+            "workspace": "TASKS",
+            "today_tasks": today_tasks,
+            "message": f"Opened Task Workspace with {len(today_tasks)} today's task(s)."
+        }
 
     # 10. OPEN LEARNING WORKSPACE
     elif action in ("open_learning_workspace", "start_learning_session"):
-        try:
-            from core.workspace_manager import get_workspace_manager
-            get_workspace_manager().open_learning_workspace()
-        except Exception:
-            pass
+        res_ws = ws_mgr.open_learning_workspace()
         _notify_ui("learning_workspace", {"action": "open"})
-        today_tasks = [t.to_dict() for t in store.today() if t.status in (TaskStatus.PENDING, TaskStatus.IN_PROGRESS)]
-        active_goals = goal_agent._load_goals()
-        subject = parameters.get("subject", parameters.get("title", ""))
-        if subject:
-            res = learning_agent.handle("next_concept", {"subject": subject})
-            return f"Opened Learning Workspace for '{subject}'.\n{res.message}"
-        return (
-            f"Opened Learning Workspace. "
-            f"You have {len(today_tasks)} active learning task(s) today across {len(active_goals)} active goal(s)."
-        )
+        today_tasks = [t.to_dict() for t in svc.get_today_tasks(user_id=user_id)]
+        return {
+            "success": True,
+            "operation": "open_learning_workspace",
+            "workspace": "LEARNING",
+            "today_tasks": today_tasks,
+            "message": "Opened Learning Workspace."
+        }
 
     # 11. OPEN GOAL WORKSPACE
     elif action == "open_goal_workspace":
-        try:
-            from core.workspace_manager import get_workspace_manager
-            get_workspace_manager().open_goals_workspace()
-        except Exception:
-            pass
+        res_ws = ws_mgr.open_goals_workspace()
         _notify_ui("goal_workspace", {"action": "open"})
-        res = goal_agent.handle("list_goals", {})
-        return f"Opened Goal Workspace.\n{res.message}"
+        return {
+            "success": True,
+            "operation": "open_goal_workspace",
+            "workspace": "GOALS",
+            "message": "Opened Goal Workspace."
+        }
 
     # 11b. OPEN CODE WORKSPACE
     elif action == "open_code_workspace":

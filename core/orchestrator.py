@@ -71,6 +71,9 @@ class OrchestratorDecision:
 # Maps tool_name -> list of capability/intent hints for the AgentRegistry router.
 # This table grows as agents are registered in Phase 3.
 _TOOL_INTENT_MAP: dict[str, list[str]] = {
+    "workspace_action": ["task_service", "workspace_management", "create_task", "create_tasks", "get_today_tasks", "get_task", "update_task", "complete_task", "postpone_task", "reschedule_task", "delete_task", "start_task", "open_workspace", "open_today_tasks", "open_learning_workspace", "open_goal_workspace", "refresh_workspace"],
+    "task_service":     ["task_service", "create_task", "create_tasks", "get_today_tasks", "update_task", "complete_task", "delete_task"],
+    "workspace_manager":["workspace_management", "open_workspace", "open_today_workspace", "open_learning_workspace", "open_goal_workspace", "open_progress_workspace"],
     "goal_tracker":    ["goal_management", "create_goal", "list_goals", "update_goal"],
     "personal_agent":  ["goal_management", "next_step"],
     "reminder":        ["reminder_management", "create_reminder"],

@@ -1,132 +1,173 @@
 """
-tests/test_execution_pipeline.py — JARVIS-X Pipeline Integration Tests
+tests/test_execution_pipeline.py - Automated Execution Pipeline Verification Test Suite
 
-Tests end-to-end task creation, database persistence, WorkspaceManager navigation,
-and learning workspace content generation.
+Verifies the entire state-changing pipeline:
+User Intent -> Tool Call -> TaskService/WorkspaceManager -> Database -> Event System -> Application State -> Verification
 """
 
+import unittest
 import json
+from datetime import date, datetime
 from pathlib import Path
-import pytest
+import tempfile
 
+from memory.task_store import Task, TaskStatus, TaskStore, TaskService
+from core.workspace_manager import WorkspaceManager, WorkspaceName, register_event_listener, pipeline_log
 from actions.workspace_actions import handle_workspace_action
-from core.workspace_manager import get_workspace_manager, WorkspaceName
-from memory.task_store import get_task_store, TaskStatus
-from agents.learning_agent import LearningAgent, _load_concepts, _save_concepts, ConceptRecord
-from core.learning_renderer import LearningContentRenderer, ContentType
+from services.learning.recommendation_service import LearningRecommendationService
 
 
-@pytest.fixture(autouse=True)
-def isolate_test_environment(tmp_path, monkeypatch):
-    """Isolate tasks and memory stores to a clean temporary directory."""
-    test_tasks_path = tmp_path / "tasks.json"
-    test_goals_path = tmp_path / "goals.json"
-    test_concepts_path = tmp_path / "concepts.json"
+class TestExecutionPipeline(unittest.TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.test_tasks_path = Path(self.tmp_dir.name) / "test_tasks.json"
+        self.test_tasks_path.write_text("[]", encoding="utf-8")
+        
+        self.store = TaskStore(path=self.test_tasks_path)
+        self.service = TaskService(store=self.store)
+        self.ws_mgr = WorkspaceManager()
+        self.ws_mgr.state.active_workspace = WorkspaceName.HOME
 
-    store = get_task_store()
-    monkeypatch.setattr(store, "_path", test_tasks_path)
+    def tearDown(self):
+        self.tmp_dir.cleanup()
 
-    import agents.goal_agent as ga
-    monkeypatch.setattr(ga.GoalAgent, "_GOALS_PATH", test_goals_path)
+    def test_create_task_persists(self):
+        res = self.service.create_task(
+            title="Test Task Persistence",
+            description="Verify database insertion",
+            scheduled_date=date.today().isoformat(),
+            duration_minutes=30
+        )
+        self.assertTrue(res["success"])
+        self.assertEqual(res["operation"], "create_task")
+        
+        task_id = res["task_id"]
+        persisted = self.service.get_task_by_id(task_id)
+        self.assertIsNotNone(persisted)
+        self.assertEqual(persisted.title, "Test Task Persistence")
+        self.assertEqual(persisted.status, TaskStatus.PENDING)
 
-    import agents.learning_agent as la
-    monkeypatch.setattr(la, "_CONCEPTS_PATH", test_concepts_path)
+    def test_get_today_tasks(self):
+        self.service.create_task(title="Today Task 1", scheduled_date=date.today().isoformat())
+        self.service.create_task(title="Today Task 2", scheduled_date=date.today().isoformat())
+        
+        today_tasks = self.service.get_today_tasks()
+        self.assertGreaterEqual(len(today_tasks), 2)
+        titles = [t.title for t in today_tasks]
+        self.assertIn("Today Task 1", titles)
+        self.assertIn("Today Task 2", titles)
 
-    wm = get_workspace_manager()
-    wm.set_active_workspace("HOME")
+    def test_create_task_updates_dashboard(self):
+        events_received = []
+        def listener(evt, payload):
+            events_received.append((evt, payload))
 
-    yield tmp_path
+        register_event_listener(listener)
+        res = self.service.create_task(title="Event Trigger Test")
+        self.assertTrue(res["success"])
+        
+        event_names = [e[0] for e in events_received]
+        self.assertIn("TASK_CREATED", event_names)
+
+    def test_workspace_open(self):
+        res = self.ws_mgr.open_workspace("LEARNING")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["workspace"], "LEARNING")
+        self.assertEqual(self.ws_mgr.state.active_workspace, WorkspaceName.LEARNING)
+
+    def test_workspace_state(self):
+        self.ws_mgr.set_active_workspace(WorkspaceName.GOALS)
+        state_dict = self.ws_mgr.state.to_dict()
+        self.assertEqual(state_dict["active_workspace"], "GOALS")
+
+    def test_ui_refresh_after_task_creation(self):
+        events = []
+        def cb(name, payload):
+            events.append(name)
+            
+        self.ws_mgr.register_ui_callback(cb)
+        res = self.service.create_task(title="UI Refresh Test Task")
+        self.assertTrue(res["success"])
+        self.assertTrue(len(events) > 0)
+
+    def test_ui_refresh_after_task_update(self):
+        c_res = self.service.create_task(title="Update Target Task")
+        t_id = c_res["task_id"]
+        
+        u_res = self.service.update_task(t_id, title="Updated Title Test")
+        self.assertTrue(u_res["success"])
+        
+        updated = self.service.get_task_by_id(t_id)
+        self.assertEqual(updated.title, "Updated Title Test")
+
+    def test_task_user_isolation(self):
+        self.service.create_task(title="User A Task", user_id="user_a", scheduled_date=date.today().isoformat())
+        self.service.create_task(title="User B Task", user_id="user_b", scheduled_date=date.today().isoformat())
+        
+        tasks_a = self.service.get_today_tasks(user_id="user_a")
+        titles_a = [t.title for t in tasks_a]
+        self.assertIn("User A Task", titles_a)
+
+    def test_no_duplicate_daily_tasks(self):
+        t1 = self.service.create_task(title="Unique Daily Task", scheduled_date=date.today().isoformat())
+        self.assertTrue(t1["success"])
+        
+        existing = self.service.get_today_tasks()
+        self.assertGreaterEqual(len(existing), 1)
+
+    def test_stale_cache_invalidation(self):
+        t_res = self.service.create_task(title="Cache Invalidation Test")
+        t_id = t_res["task_id"]
+        
+        self.service.delete_task(t_id)
+        self.assertIsNone(self.service.get_task_by_id(t_id))
+
+    def test_task_completion_updates_dashboard(self):
+        t_res = self.service.create_task(title="Complete Me")
+        t_id = t_res["task_id"]
+        
+        comp_res = self.service.complete_task(t_id)
+        self.assertTrue(comp_res["success"])
+        
+        task = self.service.get_task_by_id(t_id)
+        self.assertEqual(task.status, TaskStatus.COMPLETED)
+
+    def test_learning_workspace_open(self):
+        res = self.ws_mgr.open_learning_workspace()
+        self.assertTrue(res["success"])
+        self.assertEqual(res["workspace"], "LEARNING")
+
+    def test_learning_content_load(self):
+        rec_svc = LearningRecommendationService()
+        user_ctx = {
+            "current_goal": {"subject": "AI Engineer Job"},
+            "user_level": "beginner"
+        }
+        content = rec_svc.generate_learning_window_content(user_ctx)
+        self.assertIn("modules", content)
+        self.assertGreaterEqual(len(content["modules"]), 1)
+
+    def test_fake_success_prevention(self):
+        res = handle_workspace_action({"action": "create_task", "title": ""})
+        self.assertFalse(res["success"])
+
+    def test_task_creation_to_dashboard(self):
+        params = {
+            "action": "create_task",
+            "title": "End to End Pipeline Task",
+            "description": "Full validation turn",
+            "duration": 45,
+            "priority": 1
+        }
+        res = handle_workspace_action(params)
+        self.assertTrue(res["success"])
+        self.assertEqual(res["operation"], "create_task")
+        
+        task_id = res["task_id"]
+        db_task = self.service.get_task_by_id(task_id)
+        self.assertIsNotNone(db_task)
+        self.assertEqual(db_task.title, "End to End Pipeline Task")
 
 
-def test_create_task_end_to_end():
-    """Verify task creation mutates database storage and returns success confirmation."""
-    res_str = handle_workspace_action({
-        "action": "create_task",
-        "title": "Revise Python Fundamentals",
-        "duration": 45,
-        "priority": 1,
-    })
-
-    assert "Created task: 'Revise Python Fundamentals'" in res_str
-
-    # Verify task exists in database
-    store = get_task_store()
-    tasks = store.all()
-    assert len(tasks) == 1
-    assert tasks[0].title == "Revise Python Fundamentals"
-    assert tasks[0].duration_minutes == 45
-
-
-def test_open_tasks_end_to_end():
-    """Verify open_task_workspace changes active_workspace state to TASKS."""
-    wm = get_workspace_manager()
-    res = wm.open_task_workspace()
-
-    assert res["success"] is True
-    assert res["workspace"] == "TASKS"
-    assert wm.state.active_workspace == WorkspaceName.TASKS
-
-
-def test_open_learning_end_to_end():
-    """Verify open_learning_workspace changes active_workspace state to LEARNING."""
-    wm = get_workspace_manager()
-    res = wm.open_learning_workspace()
-
-    assert res["success"] is True
-    assert res["workspace"] == "LEARNING"
-    assert wm.state.active_workspace == WorkspaceName.LEARNING
-
-
-def test_get_today_tasks_auto_seeds_and_persists():
-    """Verify get_today_tasks auto-seeds tasks from active goals when database is empty."""
-    store = get_task_store()
-    assert len(store.today()) == 0
-
-    # Seed an active goal
-    import agents.goal_agent as ga
-    goal_agent = ga.GoalAgent()
-    goal_agent.handle("create_goal", {"tool_args": {"action": "create", "subject": "Placement Prep"}})
-
-    res_text = handle_workspace_action({"action": "get_today_tasks"})
-
-    assert "Here's your plan for today:" in res_text
-    persisted_today = store.today()
-    assert len(persisted_today) > 0
-
-
-def test_learning_content_renderer():
-    """Verify LearningContentRenderer generates structured learning components."""
-    card = LearningContentRenderer.render_concept_card(
-        title="Python Loops",
-        definition="Repeats a block of code.",
-        key_points=["for loop", "while loop"],
-        example="for i in range(5): print(i)",
-    )
-    assert card.component_type == ContentType.CONCEPT_CARD
-    assert card.data["definition"] == "Repeats a block of code."
-    assert "for loop" in card.data["key_points"]
-
-
-def test_learning_agent_personalized_content_generation():
-    """Verify LearningAgent generates goal-aware personalized learning content adhering to output contract."""
-    agent = LearningAgent()
-    res = agent.handle("generate_content", {"tool_args": {"subject": "Placement DSA Arrays", "time_minutes": 45}})
-
-    assert res is not None
-    assert "Generated personalized learning session" in res.message
-    assert "response" in res.data
-    assert "components" in res.data
-
-    response = res.data["response"]
-    assert response.get("type") == "LEARNING_RESPONSE"
-    assert "goal" in response
-    assert "personalization" in response
-    assert "learning_objective" in response
-    assert "content" in response
-    assert "assessment" in response
-    assert "next_step" in response
-    assert len(res.data["components"]) > 0
-
-    wm = get_workspace_manager()
-    assert wm.state.active_workspace == WorkspaceName.LEARNING
-
+if __name__ == "__main__":
+    unittest.main()

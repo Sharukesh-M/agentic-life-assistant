@@ -1186,7 +1186,7 @@ class _CameraPreview(QWidget):
 
 
 class SetupOverlay(QWidget):
-    done = pyqtSignal(str, str)
+    done = pyqtSignal(str, str, str)  # primary_key, learning_key, os_name
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1205,8 +1205,8 @@ class SetupOverlay(QWidget):
         self._sel_os = detected
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 22, 30, 22)
-        layout.setSpacing(8)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(6)
 
         def _lbl(txt, font_size=9, bold=False, color=C.PRI,
                  align=Qt.AlignmentFlag.AlignCenter):
@@ -1217,21 +1217,20 @@ class SetupOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", 13, True))
-        layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM))
-        layout.addSpacing(6)
+        layout.addWidget(_lbl("◈  SYSTEM & LEARNING INITIALISATION", 12, True))
+        layout.addWidget(_lbl("Configure Primary and Learning API Keys for JARVIS-X.", 8, color=C.PRI_DIM))
+        layout.addSpacing(4)
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
-        layout.addSpacing(4)
 
-        layout.addWidget(_lbl("GEMINI API KEY", 8, color=C.TEXT_DIM,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        # Primary Gemini API Key
+        layout.addWidget(_lbl("1. PRIMARY JARVIS GEMINI API KEY", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
         self._key_input = QLineEdit()
         self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._key_input.setPlaceholderText("AIza…")
-        self._key_input.setFont(QFont("Courier New", 10))
-        self._key_input.setFixedHeight(32)
+        self._key_input.setPlaceholderText("AIza… (Main JARVIS API Key)")
+        self._key_input.setFont(QFont("Courier New", 9))
+        self._key_input.setFixedHeight(30)
         self._key_input.setStyleSheet(f"""
             QLineEdit {{
                 background: #000d12; color: {C.TEXT};
@@ -1240,35 +1239,46 @@ class SetupOverlay(QWidget):
             QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
         """)
         layout.addWidget(self._key_input)
-        layout.addSpacing(12)
+
+        # Learning Gemini API Key
+        layout.addWidget(_lbl("2. DEDICATED LEARNING GEMINI API KEY", 8, color=C.ACC2, align=Qt.AlignmentFlag.AlignLeft))
+        self._learning_key_input = QLineEdit()
+        self._learning_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._learning_key_input.setPlaceholderText("AIza… (Dedicated Learning API Key)")
+        self._learning_key_input.setFont(QFont("Courier New", 9))
+        self._learning_key_input.setFixedHeight(30)
+        self._learning_key_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: #000d12; color: {C.ACC2};
+                border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {C.ACC2}; }}
+        """)
+        layout.addWidget(self._learning_key_input)
 
         sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
         sep2.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep2)
-        layout.addSpacing(4)
 
-        layout.addWidget(_lbl("OPERATING SYSTEM", 8, color=C.TEXT_DIM,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(_lbl("OPERATING SYSTEM", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
         det_name = {"windows": "Windows", "mac": "macOS", "linux": "Linux"}[detected]
-        layout.addWidget(_lbl(f"Auto-detected: {det_name}", 8, color=C.ACC2,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(_lbl(f"Auto-detected: {det_name}", 8, color=C.GREEN, align=Qt.AlignmentFlag.AlignLeft))
 
         os_row = QHBoxLayout(); os_row.setSpacing(6)
         self._os_btns: dict[str, QPushButton] = {}
         for key, label in [("windows","⊞  Windows"),("mac","  macOS"),("linux","🐧  Linux")]:
             btn = QPushButton(label)
             btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
-            btn.setFixedHeight(32)
+            btn.setFixedHeight(30)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _, k=key: self._sel(k))
             os_row.addWidget(btn)
             self._os_btns[key] = btn
         layout.addLayout(os_row)
         self._sel(detected)
-        layout.addSpacing(12)
 
         init_btn = QPushButton("▸  INITIALISE SYSTEMS")
         init_btn.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-        init_btn.setFixedHeight(36)
+        init_btn.setFixedHeight(34)
         init_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         init_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1304,14 +1314,15 @@ class SetupOverlay(QWidget):
                 """)
 
     def _submit(self):
-        key = self._key_input.text().strip()
-        if not key:
+        primary_key = self._key_input.text().strip()
+        learning_key = self._learning_key_input.text().strip() or primary_key
+        if not primary_key:
             self._key_input.setStyleSheet(
                 self._key_input.styleSheet() +
                 f" QLineEdit {{ border: 1px solid {C.RED}; }}"
             )
             return
-        self.done.emit(key, self._sel_os)
+        self.done.emit(primary_key, learning_key, self._sel_os)
 
 
 class HueWheel(QWidget):
@@ -2478,6 +2489,384 @@ class LearningWorkspaceOverlay(_HudOverlay):
         return w
 
 
+class GoalContentRendererWidget(QWidget):
+    """Dynamic Content Renderer supporting all 25 content card types."""
+
+    def __init__(self, content_blocks: list, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        cw = QWidget()
+        clay = QVBoxLayout(cw)
+        clay.setSpacing(10)
+
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            b_type = block.get("type", "TEXT").upper()
+            card = self._render_card(b_type, block)
+            if card:
+                clay.addWidget(card)
+
+        clay.addStretch()
+        scroll.setWidget(cw)
+        lay.addWidget(scroll)
+
+    def _render_card(self, b_type: str, data: dict) -> QWidget:
+        card = QFrame()
+        card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+        cl = QVBoxLayout(card)
+
+        title = data.get("title", f"{b_type.replace('_', ' ').title()} Card")
+        t_lbl = QLabel(f"📌 {title}")
+        t_lbl.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        t_lbl.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+        cl.addWidget(t_lbl)
+
+        if b_type in ("CHECKLIST", "ITINERARY", "WORKOUT_CARD", "DECISION_FRAMEWORK"):
+            items = data.get("items") or data.get("checklist") or data.get("itinerary") or []
+            for it in items:
+                it_str = it if isinstance(it, str) else json.dumps(it)
+                lbl = QLabel(f"  • {it_str}")
+                lbl.setWordWrap(True)
+                lbl.setStyleSheet(f"color: {C.WHITE}; font-family: 'Courier New'; font-size: 9pt; border: none; background: transparent;")
+                cl.addWidget(lbl)
+
+        elif b_type in ("FLOWCHART", "DIAGRAM", "PROCESS_FLOW", "TREE"):
+            nodes = data.get("nodes") or data.get("data", {}).get("nodes", [])
+            if nodes:
+                f_box = QFrame()
+                f_box.setStyleSheet(f"background: {C.DARK}; border: 1px solid {C.BORDER_A}; border-radius: 4px; padding: 8px;")
+                fl = QHBoxLayout(f_box)
+                for idx, nd in enumerate(nodes):
+                    lbl_str = nd.get("label", f"Step {idx+1}") if isinstance(nd, dict) else str(nd)
+                    nb = QLabel(lbl_str)
+                    nb.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI_DIM}; padding: 4px 8px; border-radius: 3px; font-family: 'Courier New'; font-size: 8pt;")
+                    fl.addWidget(nb)
+                    if idx < len(nodes) - 1:
+                        arr = QLabel("➔")
+                        arr.setStyleSheet(f"color: {C.ACC2}; font-weight: bold;")
+                        fl.addWidget(arr)
+                cl.addWidget(f_box)
+
+        else:
+            cnt = data.get("content") or data.get("description") or json.dumps(data, indent=2)
+            c_lbl = QLabel(str(cnt))
+            c_lbl.setWordWrap(True)
+            c_lbl.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 9pt; border: none; background: transparent;")
+            cl.addWidget(c_lbl)
+
+        return card
+
+
+class UniversalGoalWorkspaceOverlay(_HudOverlay):
+    """JARVIS-X Universal Goal Intelligence & Workspace Overlay for ANY goal category."""
+    _OW = 800
+    _OH = 560
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            UniversalGoalWorkspaceOverlay {{
+                background: rgba(1, 13, 20, 252);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedSize(self._OW, self._OH)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(16, 14, 16, 14)
+        self._lay.setSpacing(10)
+
+        self._goals = []
+        self._active_goal = {}
+        self._build_ui()
+
+    def _build_ui(self):
+        # Header Bar
+        hdr_lay = QHBoxLayout()
+        title = QLabel("🎯 JARVIS-X WORKSPACE & GOAL STUDIO")
+        title.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        hdr_lay.addWidget(title)
+
+        hdr_lay.addStretch()
+
+        self.cat_badge = QLabel("[CAREER]")
+        self.cat_badge.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New'; font-size: 8pt; background: {C.PANEL2}; padding: 3px 6px; border: 1px solid {C.BORDER}; border-radius: 3px;")
+        hdr_lay.addWidget(self.cat_badge)
+
+        close_btn = QPushButton("✕ CLOSE")
+        close_btn.setFixedSize(65, 24)
+        close_btn.setFont(QFont("Courier New", 8))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(close_btn)
+        self._lay.addLayout(hdr_lay)
+
+        # Multi-Goal Selector Row
+        self.goal_selector_lay = QHBoxLayout()
+        self.lbl_select = QLabel("Active Goal:")
+        self.lbl_select.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self.lbl_select.setStyleSheet(f"color: {C.TEXT_MED};")
+        self.goal_selector_lay.addWidget(self.lbl_select)
+
+        self.goal_combo = QComboBox()
+        self.goal_combo.setFixedHeight(26)
+        self.goal_combo.setStyleSheet(f"background: {C.PANEL2}; color: {C.PRI}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 9pt; padding-left: 6px;")
+        self.goal_combo.currentIndexChanged.connect(self._on_goal_changed)
+        self.goal_selector_lay.addWidget(self.goal_combo, stretch=1)
+        self._lay.addLayout(self.goal_selector_lay)
+
+        # Navigation Tabs
+        tab_lay = QHBoxLayout()
+        self._btn_roadmap = QPushButton("🎯 ROADMAP & MILESTONES")
+        self._btn_tasks   = QPushButton("📋 ACTION TASKS")
+        self._btn_studio  = QPushButton("💻 EXECUTION STUDIO")
+
+        for btn in (self._btn_roadmap, self._btn_tasks, self._btn_studio):
+            btn.setFixedHeight(26)
+            btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+            """)
+            tab_lay.addWidget(btn)
+        self._lay.addLayout(tab_lay)
+
+        # Stacked Pages
+        self._stack = QStackedWidget()
+        self._page_roadmap = QWidget()
+        self._page_tasks   = QWidget()
+        self._page_studio  = QWidget()
+
+        self._stack.addWidget(self._page_roadmap)
+        self._stack.addWidget(self._page_tasks)
+        self._stack.addWidget(self._page_studio)
+
+        self._lay.addWidget(self._stack, stretch=1)
+
+        self._btn_roadmap.clicked.connect(lambda: self._switch_tab(0))
+        self._btn_tasks.clicked.connect(lambda: self._switch_tab(1))
+        self._btn_studio.clicked.connect(lambda: self._switch_tab(2))
+
+        self.refresh_goals()
+        self._switch_tab(0)
+
+    def refresh_goals(self):
+        try:
+            from services.goal_intelligence_service import get_goal_intelligence_service
+            g_service = get_goal_intelligence_service()
+            self._goals = g_service.load_goals()
+        except Exception:
+            self._goals = []
+
+        self.goal_combo.blockSignals(True)
+        self.goal_combo.clear()
+
+        if not self._goals:
+            self.goal_combo.addItem("[NO ACTIVE GOAL] Create a Goal to Begin", {})
+            self._active_goal = {}
+            self.cat_badge.setText("[EMPTY]")
+        else:
+            for g in self._goals:
+                sub = g.get("subject") or g.get("title") or "Active Goal"
+                cat = g.get("category", "custom").upper()
+                self.goal_combo.addItem(f"[{cat}] {sub}", g)
+            self._active_goal = self._goals[0]
+
+        self.goal_combo.blockSignals(False)
+        self._on_goal_changed(0 if self._goals else -1)
+
+    def _on_goal_changed(self, idx: int):
+        if self._goals and 0 <= idx < len(self._goals):
+            self._active_goal = self._goals[idx]
+            cat = self._active_goal.get("category", "custom").upper()
+            self.cat_badge.setText(f"[{cat}]")
+        else:
+            self._active_goal = {}
+            self.cat_badge.setText("[NONE]")
+
+        self._render_roadmap_page()
+        self._render_tasks_page()
+        self._render_studio_page()
+
+    def _switch_tab(self, idx: int):
+        self._stack.setCurrentIndex(idx)
+        btns = [self._btn_roadmap, self._btn_tasks, self._btn_studio]
+        for i, b in enumerate(btns):
+            if i == idx:
+                b.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                b.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+
+    def _render_roadmap_page(self):
+        lay = QVBoxLayout(self._page_roadmap)
+        for i in reversed(range(lay.count())):
+            w = lay.itemAt(i).widget()
+            if w: w.deleteLater()
+
+        if not self._active_goal:
+            empty_lbl = QLabel("🎯 NO ACTIVE GOALS IN WORKSPACE\n\nState your goal to JARVIS-X to generate your roadmap!")
+            empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_lbl.setStyleSheet(f"color: {C.TEXT_MED}; font-family: 'Courier New'; font-size: 10pt;")
+            lay.addWidget(empty_lbl)
+            return
+
+        g_title = self._active_goal.get("subject") or self._active_goal.get("title") or "Goal Roadmap"
+        card = QFrame()
+        card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+        cl = QVBoxLayout(card)
+
+        hdr = QLabel(f"🎯 GOAL ROADMAP & MILESTONES: {g_title.upper()}")
+        hdr.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+        cl.addWidget(hdr)
+
+        plan = self._active_goal.get("plan") or {}
+        milestones = plan.get("milestones") or []
+
+        for ms in milestones:
+            m_title = ms.get("title") if isinstance(ms, dict) else str(ms)
+            st = ms.get("status", "pending").upper() if isinstance(ms, dict) else "PENDING"
+
+            btn = QPushButton(f"➔ [{st}] {m_title}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{ text-align: left; background: {C.DARK}; color: {C.WHITE}; border: 1px solid {C.BORDER}; padding: 8px; border-radius: 4px; font-family: 'Courier New'; font-weight: bold; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI}; background: {C.PRI_GHO}; }}
+            """)
+            btn.clicked.connect(lambda _, item_t=m_title: self._on_item_clicked(item_t))
+            cl.addWidget(btn)
+
+        lay.addWidget(card)
+
+    def _render_tasks_page(self):
+        lay = QVBoxLayout(self._page_tasks)
+        for i in reversed(range(lay.count())):
+            w = lay.itemAt(i).widget()
+            if w: w.deleteLater()
+
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New';")
+
+        try:
+            from memory.task_store import get_task_store
+            store = get_task_store()
+            today_t = store.today()
+            overdue_t = store.overdue()
+            g_name = self._active_goal.get('subject') or 'WORKSPACE'
+            lines = [f"=== ACTION TASKS FOR {g_name.upper()} ===\n"]
+            if not today_t and not overdue_t:
+                lines.append("No active scheduled tasks in workspace.")
+            else:
+                if overdue_t:
+                    lines.append("⚠️ OVERDUE ACTION ITEMS:")
+                    for t in overdue_t:
+                        lines.append(f"  • [{t.id[:8]}] {t.title} — {t.duration_minutes}m ({t.priority})")
+                    lines.append("")
+                if today_t:
+                    lines.append("📅 TODAY'S SCHEDULED ACTIONS:")
+                    for t in today_t:
+                        st = "✓ COMPLETED" if t.status == "completed" else ("▶ IN PROGRESS" if t.status == "in_progress" else "○ PENDING")
+                        lines.append(f"  • [{t.id[:8]}] {t.title} — {st}")
+            txt.setText("\n".join(lines))
+        except Exception as e:
+            txt.setText(f"Tasks error: {e}")
+
+        lay.addWidget(txt)
+
+    def _render_studio_page(self):
+        lay = QVBoxLayout(self._page_studio)
+        for i in reversed(range(lay.count())):
+            w = lay.itemAt(i).widget()
+            if w: w.deleteLater()
+
+        lbl = QLabel("💻 UNIVERSAL EXECUTION & CODE STUDIO:")
+        lbl.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        lbl.setStyleSheet(f"color: {C.TEXT_MED};")
+        lay.addWidget(lbl)
+
+        edit = QTextEdit()
+        edit.setText(f"# Universal Goal Studio: {self._active_goal.get('subject', 'Execution')}\n\ndef execute_goal():\n    print('Executing goal milestones...')\n\nexecute_goal()")
+        edit.setStyleSheet(f"background: {C.PANEL2}; color: {C.GREEN}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 11px;")
+        lay.addWidget(edit, stretch=2)
+
+        run_btn = QPushButton("▶ RUN EXECUTION STEP")
+        run_btn.setFixedHeight(28)
+        run_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        run_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 3px;")
+        lay.addWidget(run_btn)
+
+        out_txt = QTextEdit()
+        out_txt.setReadOnly(True)
+        out_txt.setPlaceholderText("Output will appear here...")
+        out_txt.setStyleSheet(f"background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 10px;")
+        lay.addWidget(out_txt, stretch=1)
+
+        def _run():
+            code = edit.toPlainText()
+            from actions.workspace_actions import handle_workspace_action
+            out = handle_workspace_action({"action": "run_workspace_code", "code": code})
+            out_txt.setText(out)
+
+        run_btn.clicked.connect(_run)
+
+    def _render_intel_page(self):
+        lay = QVBoxLayout(self._page_intel)
+        for i in reversed(range(lay.count())):
+            w = lay.itemAt(i).widget()
+            if w: w.deleteLater()
+
+        blocks = [
+            {
+                "type": "CHECKLIST",
+                "title": "Universal Action Checklist",
+                "items": ["Define outcome metrics", "Review required resources", "Execute scheduled daily tasks", "Verify milestone evidence"]
+            },
+            {
+                "type": "PROCESS_FLOW",
+                "title": "Goal Execution Workflow",
+                "nodes": [{"id": "1", "label": "Analyze Goal"}, {"id": "2", "label": "Build Milestones"}, {"id": "3", "label": "Execute Actions"}, {"id": "4", "label": "Adapt & Succeed"}],
+                "edges": [{"from": "1", "to": "2"}, {"from": "2", "to": "3"}, {"from": "3", "to": "4"}]
+            }
+        ]
+
+        renderer = GoalContentRendererWidget(blocks)
+        lay.addWidget(renderer)
+
+    def _on_item_clicked(self, item_title: str):
+        try:
+            from services.goal_intelligence_service import get_goal_intelligence_service
+            service = get_goal_intelligence_service()
+            item_id = item_title.lower().replace(" ", "_")
+            res = service.handle_item_click(item_id, item_title)
+
+            exp_type = res.get("experience_type")
+            if exp_type == "learning":
+                s_data = res.get("data", {})
+                main_win = self.window()
+                if hasattr(main_win, "show_interactive_session"):
+                    main_win.show_interactive_session(s_data)
+            else:
+                self._switch_tab(2)
+        except Exception as exc:
+            print(f"[UniversalGoalWorkspaceOverlay] Item click error: {exc}")
+
+
+
 class CommunicationOverlay(_HudOverlay):
     """JARVIS-X Communication, Call Control & Messaging Overlay."""
     _OW = 740
@@ -2749,36 +3138,26 @@ class LearningWindowOverlay(_HudOverlay):
         self.content_lay.addStretch()
 
     def _fetch_data(self):
-        tasks_text = ""
         try:
-            import json
-            with open("memory/tasks.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
-                pending = [t for t in data if t.get("status") == "pending"]
-                if pending:
-                    tasks_text = json.dumps([{"title": t["title"], "desc": t.get("description", "")} for t in pending])
-        except Exception:
-            pass
+            from services.learning.recommendation_service import LearningRecommendationService
+            from services.learning.interactive_session_service import get_interactive_session_service
 
-        default_ai_modules = ["Module 1: Deep Learning Foundations", "Module 2: Advanced NLP Models", "Module 3: Deploying ML Systems"]
-        default_ai_videos = [
-            {"title": "Neural Networks from Scratch", "url": "https://www.youtube.com/watch?v=aircAruvnKk"}, 
-            {"title": "Transformers Explained Visually", "url": "https://www.youtube.com/watch?v=SZorAJ4I-sA"}
-        ]
-        default_ai_web = [
-            {"title": "PyTorch Official Documentation", "url": "https://pytorch.org/docs/stable/index.html"},
-            {"title": "Hugging Face Course", "url": "https://huggingface.co/learn/nlp-course/chapter1/1"}
-        ]
+            sess_svc = get_interactive_session_service()
+            user_ctx = sess_svc.get_user_context()
+            goal_ctx = sess_svc.get_goal_context()
+            user_ctx["current_goal"] = goal_ctx
 
-        if tasks_text:
-            import json
-            fallback_tasks = json.loads(tasks_text) if tasks_text.startswith("[") else []
-            if fallback_tasks:
-                task_modules = [f"Task: {t.get('title', 'Unknown')}" for t in fallback_tasks]
-                default_ai_modules = task_modules + default_ai_modules
+            rec_svc = LearningRecommendationService()
+            dyn_content = rec_svc.generate_learning_window_content(user_ctx)
 
-        # Skip LLM API to prevent hanging; emit immediately
-        self.content_ready.emit(default_ai_modules, default_ai_videos, default_ai_web)
+            modules = dyn_content.get("modules", [])
+            videos = dyn_content.get("videos", [])
+            web = dyn_content.get("web", [])
+
+            self.content_ready.emit(modules, videos, web)
+        except Exception as exc:
+            print(f"[LearningWindowOverlay] Dynamic fetch error: {exc}")
+            self.content_ready.emit([], [], [])
 
     def _render_content(self, modules, videos, web):
         for i in reversed(range(self.content_lay.count())): 
@@ -2786,6 +3165,28 @@ class LearningWindowOverlay(_HudOverlay):
             if w: w.deleteLater()
             else: self.content_lay.removeItem(self.content_lay.itemAt(i))
         
+        if not modules and not videos and not web:
+            empty_card = QFrame()
+            empty_card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 16px;")
+            el = QVBoxLayout(empty_card)
+
+            eh = QLabel("🎯 FRESH START — NO ACTIVE GOALS IN MEMORY")
+            eh.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+            eh.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+            el.addWidget(eh)
+
+            et = QLabel(
+                "Memory has been cleared. State your goal to JARVIS-X (e.g. 'I want to become an AI engineer', "
+                "'Prepare for GATE 2027', or 'Start a business') to automatically generate your personalized roadmap and interactive learning modules!"
+            )
+            et.setWordWrap(True)
+            et.setStyleSheet(f"color: {C.WHITE}; font-family: 'Courier New'; font-size: 10pt; border: none; background: transparent; line-height: 1.4;")
+            el.addWidget(et)
+
+            self.content_lay.addWidget(empty_card)
+            self.content_lay.addStretch()
+            return
+
         para = QLabel(
             "Welcome to the Learning Window. Here you can access your assigned task modules, "
             "reference materials, and curated educational content to help you achieve your goals."
@@ -2800,30 +3201,662 @@ class LearningWindowOverlay(_HudOverlay):
 
         for mod in modules:
             btn = QPushButton(f"▶ {mod}")
-            btn.setStyleSheet(f"text-align: left; background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; padding: 8px;")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{ text-align: left; background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; padding: 8px; border-radius: 4px; font-family: 'Courier New'; font-weight: bold; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI}; background: {C.PRI_GHO}; }}
+            """)
+            btn.clicked.connect(lambda _, m=mod: self._on_module_clicked(m))
             self.content_lay.addWidget(btn)
 
-        lbl_yt = QLabel("🎥 Video Resources")
-        lbl_yt.setStyleSheet(f"color: {C.RED}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
-        self.content_lay.addWidget(lbl_yt)
+        if videos:
+            lbl_yt = QLabel("🎥 Video Resources")
+            lbl_yt.setStyleSheet(f"color: {C.RED}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
+            self.content_lay.addWidget(lbl_yt)
 
-        for vid in videos:
-            yt_link = QLabel(f'<a href="{vid["url"]}" style="color: #00d4ff;">{vid["title"]}</a>')
-            yt_link.setOpenExternalLinks(True)
-            yt_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
-            self.content_lay.addWidget(yt_link)
+            for vid in videos:
+                yt_link = QLabel(f'<a href="{vid["url"]}" style="color: #00d4ff;">{vid["title"]}</a>')
+                yt_link.setOpenExternalLinks(True)
+                yt_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
+                self.content_lay.addWidget(yt_link)
 
-        lbl_web = QLabel("🌐 Web Resources")
-        lbl_web.setStyleSheet(f"color: {C.GREEN}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
-        self.content_lay.addWidget(lbl_web)
+        if web:
+            lbl_web = QLabel("🌐 Web Resources")
+            lbl_web.setStyleSheet(f"color: {C.GREEN}; font-family: 'Courier New'; font-weight: bold; font-size: 11pt;")
+            self.content_lay.addWidget(lbl_web)
 
-        for link in web:
-            doc_link = QLabel(f'<a href="{link["url"]}" style="color: #00d4ff;">{link["title"]}</a>')
-            doc_link.setOpenExternalLinks(True)
-            doc_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
-            self.content_lay.addWidget(doc_link)
+            for link in web:
+                doc_link = QLabel(f'<a href="{link["url"]}" style="color: #00d4ff;">{link["title"]}</a>')
+                doc_link.setOpenExternalLinks(True)
+                doc_link.setStyleSheet("font-family: 'Courier New'; font-size: 10pt;")
+                self.content_lay.addWidget(doc_link)
 
         self.content_lay.addStretch()
+
+    def _on_module_clicked(self, module_name: str):
+        try:
+            from services.learning.interactive_session_service import get_interactive_session_service
+            service = get_interactive_session_service()
+            module_id = module_name.lower().replace(" ", "_").replace(":", "").replace("task_", "").strip()
+            session_data = service.handle_module_click(module_id)
+
+            main_win = self.window()
+            if hasattr(main_win, "show_interactive_session"):
+                main_win.show_interactive_session(session_data)
+            else:
+                ov = InteractiveLearningSessionOverlay(session_data=session_data, parent=self.parentWidget())
+                p = self.parentWidget()
+                if p:
+                    mw = p.window()
+                    if hasattr(mw, "_centre_overlay"):
+                        mw._centre_overlay(ov)
+                ov.show()
+        except Exception as exc:
+            print(f"[LearningWindowOverlay] Module click error: {exc}")
+
+
+class InteractiveLearningSessionOverlay(_HudOverlay):
+    """JARVIS-X Dedicated Interactive Learning Session Overlay."""
+    _OW = 820
+    _OH = 580
+
+    def __init__(self, session_data: dict, parent=None):
+        super().__init__(parent)
+        self.session_data = session_data
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            InteractiveLearningSessionOverlay {{
+                background: rgba(1, 13, 20, 252);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedSize(self._OW, self._OH)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(16, 14, 16, 14)
+        self._lay.setSpacing(10)
+
+        self._quiz_score = 0
+        self._quiz_index = 0
+        self._user_answers = {}
+        self._build_ui()
+
+    def _build_ui(self):
+        # Header
+        hdr_lay = QHBoxLayout()
+        back_btn = QPushButton("← LEARNING")
+        back_btn.setFixedSize(90, 24)
+        back_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        back_btn.setStyleSheet(f"""
+            QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI_DIM}; border-radius: 3px; }}
+            QPushButton:hover {{ border-color: {C.PRI}; }}
+        """)
+        back_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(back_btn)
+
+        sess_info = self.session_data.get("session", {})
+        title_str = self.session_data.get("title", sess_info.get("title", "Interactive Lesson"))
+        title_lbl = QLabel(f"📖 {title_str.upper()}")
+        title_lbl.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        hdr_lay.addWidget(title_lbl)
+
+        hdr_lay.addStretch()
+
+        goal_conn = self.session_data.get("goal_connection", {})
+        goal_name = goal_conn.get("goal_title", "Software Developer")
+        goal_badge = QLabel(f"🎯 {goal_name[:20]}")
+        goal_badge.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New'; font-size: 8pt; background: {C.PANEL2}; padding: 3px 6px; border: 1px solid {C.BORDER}; border-radius: 3px;")
+        hdr_lay.addWidget(goal_badge)
+
+        time_min = self.session_data.get("estimated_minutes", 45)
+        time_badge = QLabel(f"⏱ {time_min}m")
+        time_badge.setStyleSheet(f"color: {C.PRI}; font-family: 'Courier New'; font-size: 8pt; background: {C.PANEL2}; padding: 3px 6px; border: 1px solid {C.BORDER}; border-radius: 3px;")
+        hdr_lay.addWidget(time_badge)
+
+        level_str = self.session_data.get("user_level", "beginner")
+        lvl_badge = QLabel(f"● {level_str.upper()}")
+        lvl_badge.setStyleSheet(f"color: {C.GREEN}; font-family: 'Courier New'; font-size: 8pt; background: {C.PANEL2}; padding: 3px 6px; border: 1px solid {C.BORDER}; border-radius: 3px;")
+        hdr_lay.addWidget(lvl_badge)
+
+        close_btn = QPushButton("✕ CLOSE")
+        close_btn.setFixedSize(65, 24)
+        close_btn.setFont(QFont("Courier New", 8))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        hdr_lay.addWidget(close_btn)
+        self._lay.addLayout(hdr_lay)
+
+        # Navigation Bar (7 steps)
+        nav_lay = QHBoxLayout()
+        self._nav_btns = []
+        nav_titles = ["1. INTRO", "2. CONCEPT", "3. VISUAL", "4. EXAMPLE", "5. CODE STUDIO", "6. QUIZ", "7. COMPLETE"]
+        for idx, t in enumerate(nav_titles):
+            b = QPushButton(t)
+            b.setFixedHeight(24)
+            b.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.clicked.connect(lambda _, i=idx: self._switch_tab(i))
+            nav_lay.addWidget(b)
+            self._nav_btns.append(b)
+        self._lay.addLayout(nav_lay)
+
+        # Stacked Pages Widget
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_intro_page())
+        self._stack.addWidget(self._build_concept_page())
+        self._stack.addWidget(self._build_visual_page())
+        self._stack.addWidget(self._build_example_page())
+        self._stack.addWidget(self._build_code_page())
+        self._stack.addWidget(self._build_quiz_page())
+        self._stack.addWidget(self._build_complete_page())
+
+        self._lay.addWidget(self._stack, stretch=1)
+        self._switch_tab(0)
+
+    def _switch_tab(self, idx: int):
+        self._stack.setCurrentIndex(idx)
+        for i, b in enumerate(self._nav_btns):
+            if i == idx:
+                b.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+            else:
+                b.setStyleSheet(f"background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+
+    def _build_intro_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+        lay.setSpacing(10)
+
+        why_card = QFrame()
+        why_card.setStyleSheet(f"background: {C.PRI_GHO}; border: 1px solid {C.PRI}; border-radius: 6px; padding: 10px;")
+        why_lay = QVBoxLayout(why_card)
+
+        why_hdr = QLabel("💡 WHY YOU'RE LEARNING THIS")
+        why_hdr.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        why_hdr.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+        why_lay.addWidget(why_hdr)
+
+        why_txt = QLabel(self.session_data.get("why_this_matters", "Essential prerequisite topic for your current goal."))
+        why_txt.setWordWrap(True)
+        why_txt.setStyleSheet(f"color: {C.WHITE}; font-family: 'Courier New'; font-size: 10pt; border: none; background: transparent;")
+        why_lay.addWidget(why_txt)
+        lay.addWidget(why_card)
+
+        # Objective & Goal Connection
+        obj_card = QFrame()
+        obj_card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+        obj_lay = QVBoxLayout(obj_card)
+
+        obj_hdr = QLabel("🎯 LEARNING OBJECTIVE")
+        obj_hdr.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        obj_hdr.setStyleSheet(f"color: {C.ACC2}; border: none; background: transparent;")
+        obj_lay.addWidget(obj_hdr)
+
+        obj_txt = QLabel(self.session_data.get("objective", "Master core concepts and solve practical problems."))
+        obj_txt.setWordWrap(True)
+        obj_txt.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 9pt; border: none; background: transparent;")
+        obj_lay.addWidget(obj_txt)
+        lay.addWidget(obj_card)
+
+        lay.addStretch()
+
+        start_btn = QPushButton("▶ START INTERACTIVE LESSON →")
+        start_btn.setFixedHeight(34)
+        start_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        start_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 4px;")
+        start_btn.clicked.connect(lambda: self._switch_tab(1))
+        lay.addWidget(start_btn)
+        return w
+
+    def _build_concept_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        cw = QWidget()
+        clay = QVBoxLayout(cw)
+        clay.setSpacing(12)
+
+        blocks = self.session_data.get("content_blocks", [])
+        concept_blocks = [b for b in blocks if b.get("type") in ("CONCEPT_CARD", "TEXT", "ANALOGY", "STEP_BY_STEP")]
+        if not concept_blocks:
+            concept_blocks = blocks
+
+        for b in concept_blocks:
+            card = QFrame()
+            card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+            cl = QVBoxLayout(card)
+
+            b_title = QLabel(f"📌 {b.get('title', 'Concept Explanation')}")
+            b_title.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            b_title.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+            cl.addWidget(b_title)
+
+            b_content = QLabel(b.get("content", ""))
+            b_content.setWordWrap(True)
+            b_content.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 9.5pt; border: none; background: transparent;")
+            cl.addWidget(b_content)
+
+            kpts = b.get("key_points") or []
+            if kpts:
+                kp_hdr = QLabel("Key Takeaways:")
+                kp_hdr.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New'; font-weight: bold; margin-top: 6px; border: none; background: transparent;")
+                cl.addWidget(kp_hdr)
+                for kp in kpts:
+                    item_lbl = QLabel(f"  • {kp}")
+                    item_lbl.setWordWrap(True)
+                    item_lbl.setStyleSheet(f"color: {C.WHITE}; font-family: 'Courier New'; font-size: 9pt; border: none; background: transparent;")
+                    cl.addWidget(item_lbl)
+
+            clay.addWidget(card)
+
+        clay.addStretch()
+        scroll.setWidget(cw)
+        lay.addWidget(scroll, stretch=1)
+
+        nxt_btn = QPushButton("NEXT: VISUAL DIAGRAM →")
+        nxt_btn.setFixedHeight(30)
+        nxt_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        nxt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        nxt_btn.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+        nxt_btn.clicked.connect(lambda: self._switch_tab(2))
+        lay.addWidget(nxt_btn)
+        return w
+
+    def _build_visual_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        cw = QWidget()
+        clay = QVBoxLayout(cw)
+        clay.setSpacing(12)
+
+        blocks = self.session_data.get("content_blocks", [])
+        diag_blocks = [b for b in blocks if b.get("type") in ("DIAGRAM", "FLOWCHART", "PROCESS_FLOW", "TREE", "TABLE")]
+        if not diag_blocks:
+            diag_blocks = [{
+                "type": "FLOWCHART",
+                "title": f"{self.session_data.get('title')} Structure & Flow",
+                "data": {
+                    "nodes": [{"id": "1", "label": "Start"}, {"id": "2", "label": "Execute Operation"}, {"id": "3", "label": "Verify Result"}],
+                    "edges": [{"from": "1", "to": "2"}, {"from": "2", "to": "3"}]
+                }
+            }]
+
+        for db in diag_blocks:
+            card = QFrame()
+            card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 12px;")
+            cl = QVBoxLayout(card)
+
+            d_title = QLabel(f"📊 VISUALIZATION: {db.get('title', 'Process Diagram')}")
+            d_title.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            d_title.setStyleSheet(f"color: {C.ACC2}; border: none; background: transparent;")
+            cl.addWidget(d_title)
+
+            d_data = db.get("data") or db
+            nodes = d_data.get("nodes") or []
+            if nodes:
+                flow_box = QFrame()
+                flow_box.setStyleSheet(f"background: {C.DARK}; border: 1px solid {C.BORDER_A}; border-radius: 4px; padding: 10px;")
+                fl = QHBoxLayout(flow_box)
+                fl.setSpacing(6)
+                for idx, node in enumerate(nodes):
+                    n_label = node.get("label", f"Step {idx+1}")
+                    nb = QLabel(n_label)
+                    nb.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI_DIM}; padding: 6px 10px; border-radius: 4px; font-family: 'Courier New'; font-weight: bold;")
+                    fl.addWidget(nb)
+                    if idx < len(nodes) - 1:
+                        arr = QLabel("➔")
+                        arr.setStyleSheet(f"color: {C.ACC2}; font-weight: bold;")
+                        fl.addWidget(arr)
+                cl.addWidget(flow_box)
+
+            clay.addWidget(card)
+
+        clay.addStretch()
+        scroll.setWidget(cw)
+        lay.addWidget(scroll, stretch=1)
+
+        nxt_btn = QPushButton("NEXT: WORKED EXAMPLES →")
+        nxt_btn.setFixedHeight(30)
+        nxt_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        nxt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        nxt_btn.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+        nxt_btn.clicked.connect(lambda: self._switch_tab(3))
+        lay.addWidget(nxt_btn)
+        return w
+
+    def _build_example_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        cw = QWidget()
+        clay = QVBoxLayout(cw)
+
+        blocks = self.session_data.get("content_blocks", [])
+        ex_blocks = [b for b in blocks if b.get("type") in ("EXAMPLE", "CODE")]
+        if not ex_blocks:
+            ex_blocks = [{
+                "title": f"Standard {self.session_data.get('title')} Pattern",
+                "content": f"# Practical worked example for {self.session_data.get('title')}\n\ndata = [1, 2, 3, 4, 5]\nprint('Input Data:', data)\n\n# Operation\nresult = [x * 2 for x in data]\nprint('Output Result:', result)"
+            }]
+
+        for eb in ex_blocks:
+            card = QFrame()
+            card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+            cl = QVBoxLayout(card)
+
+            e_title = QLabel(f"💻 WORKED EXAMPLE: {eb.get('title', 'Implementation')}")
+            e_title.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            e_title.setStyleSheet(f"color: {C.GREEN}; border: none; background: transparent;")
+            cl.addWidget(e_title)
+
+            e_txt = QTextEdit()
+            e_txt.setReadOnly(True)
+            e_txt.setText(eb.get("content", ""))
+            e_txt.setStyleSheet(f"background: {C.DARK}; color: {C.GREEN}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 10px;")
+            cl.addWidget(e_txt)
+
+            clay.addWidget(card)
+
+        scroll.setWidget(cw)
+        lay.addWidget(scroll, stretch=1)
+
+        nxt_btn = QPushButton("NEXT: CODE STUDIO →")
+        nxt_btn.setFixedHeight(30)
+        nxt_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        nxt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        nxt_btn.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+        nxt_btn.clicked.connect(lambda: self._switch_tab(4))
+        lay.addWidget(nxt_btn)
+        return w
+
+    def _build_code_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+        lay.setSpacing(6)
+
+        coding_info = self.session_data.get("coding", {})
+        instr = coding_info.get("instructions", "Write & run Python code to solve the challenge:")
+        lbl_inst = QLabel(f"💻 CODE STUDIO PRACTICE: {instr}")
+        lbl_inst.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        lbl_inst.setStyleSheet(f"color: {C.TEXT_MED};")
+        lay.addWidget(lbl_inst)
+
+        c_info = coding_info.get("complexity", {})
+        t_comp, s_comp = c_info.get("time", "O(N)"), c_info.get("space", "O(1)")
+        cx_lbl = QLabel(f"⚡ Target Time Complexity: {t_comp} | Space Complexity: {s_comp}")
+        cx_lbl.setStyleSheet(f"color: {C.ACC2}; font-family: 'Courier New'; font-size: 8pt;")
+        lay.addWidget(cx_lbl)
+
+        self.code_edit = QTextEdit()
+        starter = coding_info.get("starter_code", "# Write Python code here...\nnumbers = [1, 2, 3, 4]\nprint('Output:', numbers)")
+        self.code_edit.setText(starter)
+        self.code_edit.setStyleSheet(f"background: {C.PANEL2}; color: {C.GREEN}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 11px;")
+        lay.addWidget(self.code_edit, stretch=2)
+
+        run_lay = QHBoxLayout()
+        run_btn = QPushButton("▶ RUN CODE")
+        run_btn.setFixedHeight(26)
+        run_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        run_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 3px;")
+        run_lay.addWidget(run_btn)
+
+        hints = coding_info.get("hints", [])
+        if hints:
+            hint_btn = QPushButton("💡 HINT")
+            hint_btn.setFixedSize(70, 26)
+            hint_btn.setFont(QFont("Courier New", 8))
+            hint_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            hint_btn.setStyleSheet(f"background: {C.PANEL2}; color: {C.ACC2}; border: 1px solid {C.BORDER}; border-radius: 3px;")
+            hint_btn.clicked.connect(lambda: self.code_output.setText(f"💡 HINT: {hints[0]}"))
+            run_lay.addWidget(hint_btn)
+        lay.addLayout(run_lay)
+
+        self.code_output = QTextEdit()
+        self.code_output.setReadOnly(True)
+        self.code_output.setPlaceholderText("Execution output will appear here...")
+        self.code_output.setStyleSheet(f"background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; font-family: 'Courier New'; font-size: 10px;")
+        lay.addWidget(self.code_output, stretch=1)
+
+        def _run():
+            code = self.code_edit.toPlainText()
+            from actions.workspace_actions import handle_workspace_action
+            out = handle_workspace_action({"action": "run_workspace_code", "code": code})
+            self.code_output.setText(out)
+
+        run_btn.clicked.connect(_run)
+
+        nxt_btn = QPushButton("NEXT: KNOWLEDGE CHECK (QUIZ) →")
+        nxt_btn.setFixedHeight(28)
+        nxt_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        nxt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        nxt_btn.setStyleSheet(f"background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; border-radius: 3px;")
+        nxt_btn.clicked.connect(lambda: self._switch_tab(5))
+        lay.addWidget(nxt_btn)
+
+        return w
+
+    def _build_quiz_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+        lay.setSpacing(10)
+
+        quiz_data = self.session_data.get("quiz", {})
+        questions = quiz_data.get("questions", [])
+        if not questions:
+            questions = [{
+                "question_id": "q1",
+                "question": f"What is the primary objective when applying {self.session_data.get('title')}?",
+                "options": [
+                    "Optimal data access & memory efficiency",
+                    "Infinite loop creation",
+                    "System shutdown",
+                    "CPU thermal throttling"
+                ],
+                "correct_answer": 0,
+                "explanation": "Proper usage optimizes execution performance and data organization."
+            }]
+
+        self._quiz_questions = questions
+        self._current_q_idx = 0
+
+        self.q_lbl_count = QLabel(f"📝 KNOWLEDGE CHECK (Question 1 of {len(questions)})")
+        self.q_lbl_count.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        self.q_lbl_count.setStyleSheet(f"color: {C.ACC2};")
+        lay.addWidget(self.q_lbl_count)
+
+        self.q_card = QFrame()
+        self.q_card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 12px;")
+        self.q_lay = QVBoxLayout(self.q_card)
+
+        self.q_txt = QLabel("")
+        self.q_txt.setWordWrap(True)
+        self.q_txt.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        self.q_txt.setStyleSheet(f"color: {C.WHITE}; border: none; background: transparent;")
+        self.q_lay.addWidget(self.q_txt)
+
+        self.opt_buttons = []
+        for i in range(4):
+            btn = QPushButton("")
+            btn.setFixedHeight(30)
+            btn.setFont(QFont("Courier New", 8))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"text-align: left; background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding-left: 10px; border-radius: 3px;")
+            btn.clicked.connect(lambda _, opt_idx=i: self._on_select_option(opt_idx))
+            self.q_lay.addWidget(btn)
+            self.opt_buttons.append(btn)
+
+        self.feedback_box = QLabel("")
+        self.feedback_box.setWordWrap(True)
+        self.feedback_box.setStyleSheet(f"font-family: 'Courier New'; font-size: 9pt; padding: 6px; border-radius: 3px;")
+        self.feedback_box.hide()
+        self.q_lay.addWidget(self.feedback_box)
+
+        lay.addWidget(self.q_card)
+
+        self.sub_btn = QPushButton("✓ SUBMIT ANSWER")
+        self.sub_btn.setFixedHeight(30)
+        self.sub_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        self.sub_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.sub_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 3px;")
+        self.sub_btn.clicked.connect(self._on_submit_quiz)
+        lay.addWidget(self.sub_btn)
+
+        self._selected_opt = None
+        self._render_current_question()
+
+        lay.addStretch()
+        return w
+
+    def _render_current_question(self):
+        if self._current_q_idx >= len(self._quiz_questions):
+            self._switch_tab(6)
+            return
+
+        q = self._quiz_questions[self._current_q_idx]
+        self.q_lbl_count.setText(f"📝 KNOWLEDGE CHECK (Question {self._current_q_idx+1} of {len(self._quiz_questions)})")
+        self.q_txt.setText(q.get("question", ""))
+        self._selected_opt = None
+        self.feedback_box.hide()
+
+        opts = q.get("options", [])
+        for i, btn in enumerate(self.opt_buttons):
+            if i < len(opts):
+                btn.setText(f"{chr(65+i)}) {opts[i]}")
+                btn.setStyleSheet(f"text-align: left; background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding-left: 10px; border-radius: 3px;")
+                btn.show()
+            else:
+                btn.hide()
+        self.sub_btn.setText("✓ SUBMIT ANSWER")
+
+    def _on_select_option(self, idx: int):
+        self._selected_opt = idx
+        for i, btn in enumerate(self.opt_buttons):
+            if i == idx:
+                btn.setStyleSheet(f"text-align: left; background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI}; padding-left: 10px; border-radius: 3px;")
+            else:
+                btn.setStyleSheet(f"text-align: left; background: {C.DARK}; color: {C.TEXT}; border: 1px solid {C.BORDER}; padding-left: 10px; border-radius: 3px;")
+
+    def _on_submit_quiz(self):
+        if self.sub_btn.text().startswith("NEXT"):
+            self._current_q_idx += 1
+            self._render_current_question()
+            return
+
+        if self._selected_opt is None:
+            return
+
+        q = self._quiz_questions[self._current_q_idx]
+        correct = q.get("correct_answer", 0)
+        expl = q.get("explanation", "Review the concept details.")
+
+        is_correct = (self._selected_opt == correct)
+        if is_correct:
+            self._quiz_score += 1
+            self.feedback_box.setStyleSheet(f"background: rgba(0, 255, 136, 0.15); color: {C.GREEN}; border: 1px solid {C.GREEN}; font-family: 'Courier New'; padding: 8px; border-radius: 3px;")
+            self.feedback_box.setText(f"✓ CORRECT! {expl}")
+        else:
+            self.feedback_box.setStyleSheet(f"background: rgba(255, 51, 85, 0.15); color: {C.RED}; border: 1px solid {C.RED}; font-family: 'Courier New'; padding: 8px; border-radius: 3px;")
+            self.feedback_box.setText(f"✗ INCORRECT. Correct answer: Option {chr(65+correct)}. {expl}")
+        self.feedback_box.show()
+        self.sub_btn.setText("NEXT QUESTION →")
+
+    def _build_complete_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 4, 0, 0)
+        lay.setSpacing(12)
+
+        banner = QFrame()
+        banner.setStyleSheet(f"background: {C.PRI_GHO}; border: 1px solid {C.PRI}; border-radius: 6px; padding: 14px;")
+        bl = QVBoxLayout(banner)
+
+        b_lbl = QLabel("🎉 SESSION COMPLETED & PROGRESS UPDATED!")
+        b_lbl.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        b_lbl.setStyleSheet(f"color: {C.GREEN}; border: none; background: transparent;")
+        bl.addWidget(b_lbl)
+
+        score_pct = int((self._quiz_score / max(1, len(getattr(self, '_quiz_questions', [1])))) * 100)
+        p_lbl = QLabel(f"Module: {self.session_data.get('title')} | Mastery Score: {score_pct}%")
+        p_lbl.setStyleSheet(f"color: {C.WHITE}; font-family: 'Courier New'; font-size: 10pt; border: none; background: transparent;")
+        bl.addWidget(p_lbl)
+
+        lay.addWidget(banner)
+
+        # Created Task Card
+        t_id = self.session_data.get("created_task_id")
+        t_info = self.session_data.get("task", {})
+        if t_info and t_info.get("required"):
+            t_card = QFrame()
+            t_card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+            tl = QVBoxLayout(t_card)
+            th = QLabel(f"📋 TASK CREATED: {t_info.get('title')}")
+            th.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            th.setStyleSheet(f"color: {C.ACC2}; border: none; background: transparent;")
+            tl.addWidget(th)
+
+            td = QLabel(f"Added to Today's Schedule ({t_info.get('estimated_minutes', 30)}m) — {t_info.get('description')}")
+            td.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 8.5pt; border: none; background: transparent;")
+            tl.addWidget(td)
+            lay.addWidget(t_card)
+
+        # Next Step
+        nxt = self.session_data.get("next_step", {})
+        n_card = QFrame()
+        n_card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+        nl = QVBoxLayout(n_card)
+        nh = QLabel(f"🚀 RECOMMENDED NEXT MODULE: {nxt.get('title', 'Next Milestone')}")
+        nh.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        nh.setStyleSheet(f"color: {C.PRI}; border: none; background: transparent;")
+        nl.addWidget(nh)
+        nd = QLabel(nxt.get("reason", "You are ready for the next topic in your roadmap."))
+        nd.setStyleSheet(f"color: {C.TEXT}; font-family: 'Courier New'; font-size: 8.5pt; border: none; background: transparent;")
+        nl.addWidget(nd)
+        lay.addWidget(n_card)
+
+        lay.addStretch()
+
+        fin_btn = QPushButton("✓ FINISH & UPDATE ROADMAP →")
+        fin_btn.setFixedHeight(34)
+        fin_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        fin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        fin_btn.setStyleSheet(f"background: {C.GREEN_D}; color: {C.WHITE}; border-radius: 4px;")
+
+        def _finish():
+            try:
+                from services.learning.interactive_session_service import get_interactive_session_service
+                service = get_interactive_session_service()
+                service.complete_session(self.session_data.get("session_id", ""), score_pct)
+            except Exception as e:
+                print(f"[InteractiveLearningSessionOverlay] Finish error: {e}")
+            self.hide()
+
+        fin_btn.clicked.connect(_finish)
+        lay.addWidget(fin_btn)
+
+        return w
 
 
 class ClipboardPanel(QWidget):
@@ -3452,6 +4485,18 @@ class MainWindow(QMainWindow):
         self._customize_overlay: CustomizeOverlay | None = None
         self._workspace_overlay: LearningWorkspaceOverlay | None = None
         self._workspace_sig.connect(self._on_workspace_signal)
+        try:
+            from core.workspace_manager import get_workspace_manager
+            from actions.workspace_actions import register_workspace_ui_callback
+            
+            def _ws_event_bridge(v_name, payload):
+                self._workspace_sig.emit(str(v_name), payload or {})
+
+            get_workspace_manager().register_ui_callback(_ws_event_bridge)
+            register_workspace_ui_callback(_ws_event_bridge)
+        except Exception as exc:
+            print(f"[MainWindow] Workspace callback registration error: {exc}")
+            
         self._comm_overlay: CommunicationOverlay | None = None
         self._comm_sig.connect(self._on_comm_signal)
 
@@ -4505,6 +5550,14 @@ class MainWindow(QMainWindow):
         settings_btn.clicked.connect(self._open_plugin_settings)
         lay.addWidget(settings_btn)
 
+        apikeys_btn = QPushButton("🔑  API KEYS & LEARNING")
+        apikeys_btn.setFixedHeight(26)
+        apikeys_btn.setFont(QFont("Courier New", 7))
+        apikeys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        apikeys_btn.setStyleSheet(_BTN_STYLE_DIM)
+        apikeys_btn.clicked.connect(self._open_api_keys_settings)
+        lay.addWidget(apikeys_btn)
+
         w.adjustSize()
         return w
 
@@ -5076,7 +6129,7 @@ class MainWindow(QMainWindow):
             self._workspace_overlay.raise_()
             self._workspace_overlay.activateWindow()
             return
-        ov = LearningWorkspaceOverlay(parent=self.centralWidget())
+        ov = UniversalGoalWorkspaceOverlay(parent=self.centralWidget())
         ov._switch_tab(tab_idx)
         self._centre_overlay(ov)
         self._workspace_overlay = ov
@@ -5091,6 +6144,15 @@ class MainWindow(QMainWindow):
         self._centre_overlay(ov)
         self._learning_window_overlay = ov
         ov.show()
+
+    def show_interactive_session(self, session_data: dict):
+        if hasattr(self, "_interactive_session_overlay") and self._interactive_session_overlay and not self._interactive_session_overlay.isHidden():
+            self._interactive_session_overlay.hide()
+        ov = InteractiveLearningSessionOverlay(session_data=session_data, parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._interactive_session_overlay = ov
+        ov.show()
+
 
     def _on_workspace_signal(self, view_name: str, payload: dict):
         if hasattr(self, "_task_widget") and self._task_widget:
@@ -5273,7 +6335,7 @@ class MainWindow(QMainWindow):
     def _show_setup(self):
         ov = SetupOverlay(self.centralWidget())
         cw = self.centralWidget()
-        ow, oh = 460, 390
+        ow, oh = 480, 410
         ov.setGeometry(
             (cw.width()  - ow) // 2,
             (cw.height() - oh) // 2,
@@ -5283,19 +6345,155 @@ class MainWindow(QMainWindow):
         ov.show()
         self._overlay = ov
 
-    def _on_setup_done(self, key: str, os_name: str):
+    def _on_setup_done(self, primary_key: str, learning_key: str, os_name: str):
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        API_FILE.write_text(
-            json.dumps({"gemini_api_key": key, "os_system": os_name}, indent=4),
-            encoding="utf-8",
-        )
+        config_data = {
+            "gemini_api_key": primary_key,
+            "learning_gemini_api_key": learning_key,
+            "os_system": os_name
+        }
+        API_FILE.write_text(json.dumps(config_data, indent=4), encoding="utf-8")
+        os.environ["GEMINI_API_KEY"] = primary_key
+        os.environ["GEMINI_LEARNING_API_KEY"] = learning_key
+        try:
+            from services.learning.gemini_learning_client import get_gemini_learning_client
+            get_gemini_learning_client().reload_key()
+        except Exception:
+            pass
         self._ready = True
         if self._overlay:
             self._overlay.hide()
             self._overlay = None
         self._apply_state("LISTENING")
         self._assistant_name = _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
-        self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
+        self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. Primary & Learning API Keys configured. {self._assistant_name} online.")
+
+    def _open_api_keys_settings(self):
+        cw = self.centralWidget()
+        ov = ApiKeysSettingsOverlay(parent=cw)
+        ow, oh = 460, 340
+        ov.setGeometry(
+            (cw.width()  - ow) // 2,
+            (cw.height() - oh) // 2,
+            ow, oh,
+        )
+        ov.show()
+        ov.raise_()
+        self._apikeys_overlay = ov
+
+
+class ApiKeysSettingsOverlay(QWidget):
+    """Floating overlay to view, test, and edit Primary & Learning Gemini API Keys."""
+
+    done = pyqtSignal(str, str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            ApiKeysSettingsOverlay {{
+                background: rgba(0, 6, 10, 245);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 6px;
+            }}
+        """)
+        
+        cfg = _read_full_config()
+        pri_key = cfg.get("gemini_api_key", os.getenv("GEMINI_API_KEY", ""))
+        lrn_key = cfg.get("learning_gemini_api_key", os.getenv("GEMINI_LEARNING_API_KEY", ""))
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(8)
+
+        def _lbl(txt, font_size=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignLeft):
+            w = QLabel(txt)
+            w.setAlignment(align)
+            w.setFont(QFont("Courier New", font_size, QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w.setStyleSheet(f"color: {color}; background: transparent;")
+            return w
+
+        layout.addWidget(_lbl("🔑  API KEYS & LEARNING CONFIGURATION", 11, True, align=Qt.AlignmentFlag.AlignCenter))
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
+
+        layout.addWidget(_lbl("1. PRIMARY JARVIS GEMINI API KEY", 8, color=C.TEXT_DIM))
+        self._pri_input = QLineEdit(pri_key)
+        self._pri_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._pri_input.setPlaceholderText("AIza… (Main JARVIS System Key)")
+        self._pri_input.setFont(QFont("Courier New", 9))
+        self._pri_input.setFixedHeight(30)
+        self._pri_input.setStyleSheet(f"""
+            QLineEdit {{ background: #000d12; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}
+            QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
+        """)
+        layout.addWidget(self._pri_input)
+
+        layout.addWidget(_lbl("2. DEDICATED LEARNING GEMINI API KEY", 8, color=C.ACC2))
+        self._lrn_input = QLineEdit(lrn_key)
+        self._lrn_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._lrn_input.setPlaceholderText("AIza… (Dedicated Learning API Key)")
+        self._lrn_input.setFont(QFont("Courier New", 9))
+        self._lrn_input.setFixedHeight(30)
+        self._lrn_input.setStyleSheet(f"""
+            QLineEdit {{ background: #000d12; color: {C.ACC2}; border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}
+            QLineEdit:focus {{ border: 1px solid {C.ACC2}; }}
+        """)
+        layout.addWidget(self._lrn_input)
+
+        self._status_lbl = _lbl("", 8, color=C.GREEN, align=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._status_lbl)
+
+        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        save_btn = QPushButton("▸ SAVE API KEYS")
+        save_btn.setFixedHeight(32)
+        save_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.GREEN}; border: 1px solid {C.GREEN_D}; border-radius: 3px; }}
+            QPushButton:hover {{ background: #001a0d; border: 1px solid {C.GREEN}; }}
+        """)
+        save_btn.clicked.connect(self._save_keys)
+        btn_row.addWidget(save_btn)
+
+        close_btn = QPushButton("CANCEL")
+        close_btn.setFixedHeight(32)
+        close_btn.setFont(QFont("Courier New", 9))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_DIM}; border: 1px solid {C.BORDER}; border-radius: 3px; }}
+            QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        btn_row.addWidget(close_btn)
+
+        layout.addLayout(btn_row)
+
+    def _save_keys(self):
+        pri = self._pri_input.text().strip()
+        lrn = self._lrn_input.text().strip() or pri
+        if not pri:
+            self._status_lbl.setText("❌ Primary API Key cannot be empty.")
+            self._status_lbl.setStyleSheet(f"color: {C.RED}; background: transparent;")
+            return
+            
+        cfg = _read_full_config()
+        cfg["gemini_api_key"] = pri
+        cfg["learning_gemini_api_key"] = lrn
+        API_FILE.write_text(json.dumps(cfg, indent=4), encoding="utf-8")
+        os.environ["GEMINI_API_KEY"] = pri
+        os.environ["GEMINI_LEARNING_API_KEY"] = lrn
+        
+        try:
+            from services.learning.gemini_learning_client import get_gemini_learning_client
+            get_gemini_learning_client().reload_key()
+        except Exception:
+            pass
+
+        self._status_lbl.setText("✓ Primary and Learning API Keys saved successfully!")
+        self._status_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
+        self.done.emit(pri, lrn)
+        QTimer.singleShot(1200, self.hide)
 
 
 class _RootShim:

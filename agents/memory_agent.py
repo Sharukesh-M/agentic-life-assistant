@@ -51,9 +51,28 @@ class MemoryAgent(BaseAgent):
             "recall_memory":     self._recall,
             "summarize_session": self._summarize,
             "profile_summary":   self._profile_summary,
+            "update_profile":    self._update_profile,
         }
         handler = dispatch.get(action, self._recall)
         return handler(args, context)
+
+    def _update_profile(self, args: dict, ctx: dict) -> AgentResult:
+        """Update user profile in profile.json, goals.json, and learning memory."""
+        try:
+            from memory.user_details_capturer import capture_user_profile_details, capture_user_goal
+            name = args.get("preferred_name") or args.get("name")
+            role = args.get("user_type") or args.get("role")
+            exam = args.get("target_exam") or args.get("exam")
+            subjects = args.get("subjects") or args.get("focus_areas")
+            if isinstance(subjects, str):
+                subjects = [s.strip() for s in subjects.split(",")]
+            
+            p_res = capture_user_profile_details(preferred_name=name, user_type=role, target_exam=exam, subjects=subjects, details=args)
+            if exam:
+                capture_user_goal(subject=exam, goal_type="exam_prep")
+            return AgentResult(message="User profile updated and persisted successfully.", data=p_res)
+        except Exception as exc:
+            return AgentResult(success=False, error=str(exc))
 
     def _save(self, args: dict, ctx: dict) -> AgentResult:
         """Save a memory fact."""

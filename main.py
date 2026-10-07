@@ -249,6 +249,20 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "factory_reset",
+        "description": (
+            "Completely factory reset JARVIS-X. "
+            "Wipes all user profile data, goals, roadmaps, tasks, learning sessions, "
+            "concepts, and long-term memory. Resets onboarding status to not_started. "
+            "Call when the user says (in ANY language): factory reset, clear memory, "
+            "clear profile, reset everything, start fresh."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+        }
+    },
+    {
         "name": "save_memory",
         "description": (
             "Save an important personal fact about the user to long-term memory. "
@@ -904,7 +918,18 @@ class JarvisLive:
                 raise _OrchestratorHandled(result)
             # ─────────────────────────────────────────────────────────────────
 
-            if name == "recall_memory":
+            if name == "factory_reset" or name == "clear_memory":
+                from memory.memory_manager import factory_reset
+                factory_reset()
+                self._resume_handle = None
+                if hasattr(self.ui, "refresh_workspace"):
+                    try:
+                        self.ui.refresh_workspace()
+                    except Exception:
+                        pass
+                result = "Factory reset complete. All memory, profile data, goals, tasks, and learning sessions have been completely cleared. Onboarding state is reset to fresh."
+
+            elif name == "recall_memory":
                 # Local file search: no network, no second model. Kept out of
                 # the executor deliberately — it is a dictionary scan over a few
                 # hundred short strings, and a thread hop would cost more than

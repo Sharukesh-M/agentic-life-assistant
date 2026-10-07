@@ -87,6 +87,7 @@ class Task:
         updated_at          -- ISO datetime of last status change
     """
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    user_id: str = "default_user"
     goal_id: str = ""
     goal_subject: str = ""
     milestone_id: str = ""
@@ -267,6 +268,10 @@ class TaskStore:
         self.emit_event("TASK_CREATED", task)
         return task
 
+    def add(self, task: Task) -> Task:
+        """Alias for create(task)."""
+        return self.create(task)
+
     def create_task(self, title: str, description: str = "", goal_id: str = "", goal_subject: str = "", milestone_id: str = "", objective: str = "", scheduled_date: str = "", start_time: str = "", duration_minutes: int = 30, priority: int = 0) -> dict:
         """Explicit helper returning structured success dictionary for tool verification."""
         if not scheduled_date:
@@ -357,6 +362,16 @@ class TaskStore:
                     self.emit_event("TASK_DELETED", target)
                 return True
             return False
+
+    def clear(self) -> None:
+        """Clear all tasks permanently from tasks.json."""
+        with self._lock:
+            self._save([])
+        try:
+            events_path = _get_base_dir() / "memory" / "task_events.json"
+            events_path.write_text("[]", encoding="utf-8")
+        except Exception:
+            pass
 
     # ── Queries ─────────────────────────────────────────────────────────────
 
@@ -606,3 +621,215 @@ def get_task_store() -> TaskStore:
             if _default_store is None:
                 _default_store = TaskStore()
     return _default_store
+
+
+# ---------------------------------------------------------------------------
+# TaskService: Authoritative Execution & Verification Layer
+# ---------------------------------------------------------------------------
+
+class TaskService:
+    """High-level Task Service with mandatory verification, batch operations,
+    user isolation, and structured tool result contracts."""
+
+    def __init__(self, store: Optional[TaskStore] = None):
+        self.store = store or get_task_store()
+
+    def create_task(
+        self,
+        title: str,
+        description: str = "",
+        user_id: str = "default_user",
+        goal_id: str = "",
+        goal_subject: str = "",
+        milestone_id: str = "",
+        objective: str = "",
+        scheduled_date: str = "",
+        start_time: str = "",
+        duration_minutes: int = 30,
+        priority: int = 0
+    ) -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        pipeline_log("TOOL_CALL", tool="TaskService.create_task", title=title, goal_id=goal_id, date=scheduled_date)
+        
+        if not scheduled_date:
+            scheduled_date = date.today().isoformat()
+        
+        task = Task(
+            title=title,
+            description=description,
+            user_id=user_id,
+            goal_id=goal_id,
+            goal_subject=goal_subject,
+            milestone_id=milestone_id,
+            objective=objective,
+            scheduled_date=scheduled_date,
+            scheduled_time=start_time or None,
+            duration_minutes=duration_minutes,
+            priority=priority,
+            status=TaskStatus.PENDING,
+        )
+        saved = self.store.create(task)
+        
+        # VERIFICATION STEP: Query database immediately to ensure persistence
+        verified_task = self.store.get(saved.id)
+        if not verified_task:
+            pipeline_log("VERIFY", task_id=saved.id, task_persisted=False, status="FAILED")
+            return {
+                "success": False,
+                "operation": "create_task",
+                "error_code": "VERIFICATION_FAILED",
+                "message": f"Task '{title}' failed database persistence verification."
+            }
+        
+        pipeline_log("DATABASE", action="INSERT", task_id=saved.id, title=saved.title)
+        pipeline_log("VERIFY", task_id=saved.id, task_persisted=True, status="PASSED")
+        
+        try:
+            emit_event(EventType.TASK_CREATED, {"user_id": user_id, "task": verified_task.to_dict()})
+        except Exception:
+            pass
+            
+        return {
+            "success": True,
+            "operation": "create_task",
+            "task_id": verified_task.id,
+            "task": verified_task.to_dict(),
+            "message": f"Task '{verified_task.title}' created and verified in database."
+        }
+
+    def create_tasks(self, tasks_data: list[dict | Task], user_id: str = "default_user") -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log
+        pipeline_log("TOOL_CALL", tool="TaskService.create_tasks", count=len(tasks_data))
+        created_ids = []
+        created_tasks = []
+        for item in tasks_data:
+            t_dict = item.to_dict() if isinstance(item, Task) else item
+            
+            res = self.create_task(
+                title=t_dict.get("title", "Untitled Task"),
+                description=t_dict.get("description", ""),
+                user_id=user_id,
+                goal_id=t_dict.get("goal_id", ""),
+                goal_subject=t_dict.get("goal_subject", ""),
+                milestone_id=t_dict.get("milestone_id", ""),
+                objective=t_dict.get("objective", ""),
+                scheduled_date=t_dict.get("scheduled_date", date.today().isoformat()),
+                start_time=t_dict.get("scheduled_time", t_dict.get("start_time", "")),
+                duration_minutes=int(t_dict.get("duration_minutes", 30)),
+                priority=int(t_dict.get("priority", 0)),
+            )
+            if res.get("success"):
+                created_ids.append(res["task_id"])
+                created_tasks.append(res["task"])
+                
+        is_all_success = len(created_ids) == len(tasks_data)
+        return {
+            "success": is_all_success,
+            "operation": "create_tasks",
+            "created_count": len(created_ids),
+            "task_ids": created_ids,
+            "tasks": created_tasks,
+            "message": f"Successfully created and verified {len(created_ids)} task(s)."
+        }
+
+    def get_task(self, task_id: str) -> Optional[Task]:
+        return self.store.get(task_id)
+
+    def get_task_by_id(self, task_id: str) -> Optional[Task]:
+        return self.get_task(task_id)
+
+    def get_today_tasks(self, user_id: str = "default_user", target_date: Optional[str] = None) -> list[Task]:
+        from core.workspace_manager import pipeline_log
+        iso_d = target_date or date.today().isoformat()
+        pipeline_log("DATABASE", query="QUERY tasks", user_id=user_id, date=iso_d)
+        all_today = self.store.for_date(iso_d)
+        user_tasks = [t for t in all_today if t.user_id == user_id or user_id == "default_user"]
+        pipeline_log("APP_STATE", tasks_count=len(user_tasks))
+        return user_tasks
+
+    def get_upcoming_tasks(self, user_id: str = "default_user") -> list[Task]:
+        today_str = date.today().isoformat()
+        return [t for t in self.store.all() if t.scheduled_date and t.scheduled_date > today_str and (t.user_id == user_id or user_id == "default_user")]
+
+    def get_overdue_tasks(self, user_id: str = "default_user") -> list[Task]:
+        return [t for t in self.store.overdue() if t.user_id == user_id or user_id == "default_user"]
+
+    def get_pending_tasks(self, goal_id: Optional[str] = None, user_id: str = "default_user") -> list[Task]:
+        tasks = self.store.pending(goal_id=goal_id)
+        return [t for t in tasks if t.user_id == user_id or user_id == "default_user"]
+
+    def update_task(self, task_id: str, **kwargs) -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        pipeline_log("TOOL_CALL", tool="TaskService.update_task", task_id=task_id)
+        updated = self.store.update(task_id, **kwargs)
+        if not updated:
+            return {"success": False, "operation": "update_task", "message": f"Task '{task_id}' not found."}
+        try:
+            emit_event(EventType.TASK_UPDATED, {"task": updated.to_dict()})
+        except Exception:
+            pass
+        return {"success": True, "operation": "update_task", "task": updated.to_dict(), "message": f"Updated task [{task_id}]." }
+
+    def complete_task(self, task_id: str) -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        pipeline_log("TOOL_CALL", tool="TaskService.complete_task", task_id=task_id)
+        res = self.store.complete_task(task_id)
+        if res.get("success"):
+            try:
+                emit_event(EventType.TASK_COMPLETED, {"task": res["task"]})
+            except Exception:
+                pass
+            return {"success": True, "operation": "complete_task", "task": res["task"], "message": f"Task [{task_id}] marked complete."}
+        return {"success": False, "operation": "complete_task", "message": res.get("error", "Failed to complete task.")}
+
+    def postpone_task(self, task_id: str, new_date: str = "", reason: str = "") -> dict[str, Any]:
+        return self.reschedule_task(task_id, new_date, reason)
+
+    def reschedule_task(self, task_id: str, new_date: str = "", reason: str = "") -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        if not new_date:
+            new_date = (date.today() + timedelta(days=1)).isoformat()
+        pipeline_log("TOOL_CALL", tool="TaskService.reschedule_task", task_id=task_id, new_date=new_date)
+        res = self.store.reschedule(task_id, new_date, reason)
+        if res:
+            try:
+                emit_event(EventType.TASK_RESCHEDULED, {"task": res.to_dict()})
+            except Exception:
+                pass
+            return {"success": True, "operation": "reschedule_task", "task": res.to_dict(), "message": f"Rescheduled task to {new_date}."}
+        return {"success": False, "operation": "reschedule_task", "message": f"Task '{task_id}' not found."}
+
+    def delete_task(self, task_id: str) -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        pipeline_log("TOOL_CALL", tool="TaskService.delete_task", task_id=task_id)
+        ok = self.store.delete(task_id)
+        if ok:
+            try:
+                emit_event(EventType.TASK_DELETED, {"task_id": task_id})
+            except Exception:
+                pass
+            return {"success": True, "operation": "delete_task", "task_id": task_id, "message": f"Deleted task [{task_id}]."}
+        return {"success": False, "operation": "delete_task", "message": f"Task '{task_id}' not found."}
+
+    def start_task(self, task_id: str) -> dict[str, Any]:
+        from core.workspace_manager import pipeline_log, emit_event, EventType
+        pipeline_log("TOOL_CALL", tool="TaskService.start_task", task_id=task_id)
+        task = self.store.get(task_id)
+        if not task:
+            return {"success": False, "operation": "start_task", "message": f"Task '{task_id}' not found."}
+        task.start()
+        self.store.update(task.id, status=TaskStatus.IN_PROGRESS)
+        try:
+            emit_event(EventType.TASK_UPDATED, {"task": task.to_dict()})
+        except Exception:
+            pass
+        return {"success": True, "operation": "start_task", "task": task.to_dict(), "message": f"Started task '{task.title}'."}
+
+
+_task_service_instance: Optional[TaskService] = None
+
+def get_task_service() -> TaskService:
+    global _task_service_instance
+    if _task_service_instance is None:
+        _task_service_instance = TaskService()
+    return _task_service_instance

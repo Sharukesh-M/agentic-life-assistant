@@ -108,33 +108,22 @@ def _open_chrome_searches(queries: list[str]) -> bool:
 
 
 def start_goal_workflow(subject: str, goal_type: str | None = None) -> dict:
-    """Research and seed a newly created goal. Safe to call more than once."""
+    """Research and seed a newly created goal using Universal Goal Intelligence Engine."""
     subject = re.sub(r"\s+", " ", (subject or "").strip())
     if not subject:
         return {"ok": False, "message": "No goal subject provided."}
     kind = goal_type or _goal_type(subject)
-    goals = _load_goals()
-    goal = next((g for g in goals if str(g.get("subject", "")).lower() == subject.lower()), None)
-    if goal is None:
-        return {"ok": False, "message": f"Goal '{subject}' was not found."}
-
-    plan = goal.get("plan") or _starter_plan(subject, kind)
-    goal["goal_type"] = kind
-    goal["plan"] = plan
-    goal.setdefault("workflow", {})
-    goal["workflow"].update({
-        "research_started": datetime.now().isoformat(),
-        "queries": _queries(subject, kind),
-        "browser_opened": False,
-    })
-    opened = _open_chrome_searches(goal["workflow"]["queries"])
-    goal["workflow"]["browser_opened"] = bool(opened)
-    _save_goals(goals)
-    return {
-        "ok": True,
-        "goal": subject,
-        "goal_type": kind,
-        "queries": goal["workflow"]["queries"],
-        "browser_opened": bool(opened),
-        "next_task": plan.get("next_task"),
-    }
+    
+    try:
+        from services.goal_intelligence_service import get_goal_intelligence_service
+        g_service = get_goal_intelligence_service()
+        intel_res = g_service.analyze_goal(subject, category=kind)
+        return {
+            "ok": True,
+            "goal": subject,
+            "goal_type": kind,
+            "intelligence": intel_res
+        }
+    except Exception as exc:
+        print(f"[GOAL_WORKFLOW] Goal intelligence analysis error: {exc}")
+        return {"ok": False, "error": str(exc)}
